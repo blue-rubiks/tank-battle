@@ -8,7 +8,8 @@
  */
 
 import Phaser from 'phaser';
-import { GAME_CONFIG, TILE_TYPES } from '../utils/Constants';
+import GridMovement from '../utils/GridMovement';
+import { GAME_CONFIG, TILE_TYPES, AI_CONFIG } from '../utils/Constants';
 
 export default class AIBlackboard {
   /**
@@ -42,16 +43,18 @@ export default class AIBlackboard {
     this.attackingEnemies = new Set();    // 正在攻擊的敵人集合
 
     // === 巡邏點系統 ===
+    // Stryker disable next-line ArrayDeclaration: 建構子稍後由 _initializePatrolPoints 覆寫（等價）
     this.patrolPoints = [];               // 全局巡邏點列表
     this.assignedPatrolPoints = new Map(); // 敵人ID -> 巡邏點索引
 
     // === 配置 ===
+    // 包抄 / 間距參數取自 AI_CONFIG，調整設定才會真正生效
     this.config = {
-      positionUpdateInterval: 100,        // 位置更新間隔 (ms)
-      flankingDistance: 120,              // 包抄距離
-      minDistanceBetweenEnemies: 60,      // 敵人之間最小距離
-      playerInfoExpireTime: 5000,         // 玩家資訊過期時間 (ms)
-      maxFlankingEnemies: 2               // 最大同時包抄敵人數
+      positionUpdateInterval: 100,                              // 位置更新間隔 (ms)
+      flankingDistance: AI_CONFIG.FLANKING_DISTANCE,            // 包抄距離
+      minDistanceBetweenEnemies: AI_CONFIG.MIN_ENEMY_SPACING,   // 敵人之間最小距離
+      playerInfoExpireTime: 5000,                               // 玩家資訊過期時間 (ms)
+      maxFlankingEnemies: AI_CONFIG.MAX_FLANKING_ENEMIES        // 最大同時包抄敵人數
     };
 
     // 初始化巡邏點
@@ -174,10 +177,11 @@ export default class AIBlackboard {
   /**
    * 計算包抄位置
    * @param {string} enemyId - 敵人 ID
-   * @param {Object} enemyPos - 敵人當前位置
-   * @returns {Object|null} 包抄位置 { x, y }
+   * @param {string|null} preferredSide - 偏好的包抄側（'left' | 'right' | 'top' | 'bottom'）：
+   *   敵人上次包抄的那一側，可用時優先沿用，避免玩家一轉向就換邊造成左右來回
+   * @returns {Object|null} 包抄位置 { x, y, side }
    */
-  calculateFlankingPosition(enemyId, enemyPos) {
+  calculateFlankingPosition(enemyId, preferredSide = null) {
     if (!this.playerLastKnownPosition) return null;
 
     const playerPos = this.playerLastKnownPosition;
@@ -194,7 +198,8 @@ export default class AIBlackboard {
     // 根據玩家面向方向，優先選擇側翼或背後
     const prioritizedPositions = this._prioritizeFlankingPositions(
       potentialPositions,
-      this.playerDirection
+      this.playerDirection,
+      preferredSide
     );
 
     // 選擇最佳的未被佔據的位置
@@ -222,11 +227,12 @@ export default class AIBlackboard {
   }
 
   /**
-   * 根據玩家方向優先排序包抄位置
+   * 根據玩家方向優先排序包抄位置；有偏好側時該側排最前
    * @private
    */
-  _prioritizeFlankingPositions(positions, playerDirection) {
+  _prioritizeFlankingPositions(positions, playerDirection, preferredSide = null) {
     // 優先選擇玩家背後和側翼
+    // Stryker disable StringLiteral: 首項改為空字串時 indexOf 為 -1，依然排在最前（等價）
     const priorityMap = {
       'up': ['bottom', 'left', 'right', 'top'],
       'down': ['top', 'left', 'right', 'bottom'],
@@ -235,10 +241,12 @@ export default class AIBlackboard {
     };
 
     const priority = priorityMap[playerDirection] || ['left', 'right', 'top', 'bottom'];
+    // Stryker restore StringLiteral
 
-    return positions.sort((a, b) => {
-      return priority.indexOf(a.side) - priority.indexOf(b.side);
-    });
+    // 偏好側（上次包抄的那一側）排最前，其餘維持玩家方向的優先序
+    const rank = (side) => (side === preferredSide ? -1 : priority.indexOf(side));
+
+    return positions.sort((a, b) => rank(a.side) - rank(b.side));
   }
 
   /**
@@ -264,12 +272,13 @@ export default class AIBlackboard {
    */
   _isPositionValid(pos) {
     const margin = 32;
-    const width = this.scene.game.config.width || 832;
-    const height = this.scene.game.config.height || 832;
+    // 以遊戲場為準（畫布高度含上下 HUD，不可直接使用）
+    const top = GAME_CONFIG.PLAY_OFFSET_Y;
+    const bottom = top + GAME_CONFIG.PLAY_HEIGHT;
 
     // 首先檢查邊界
-    if (pos.x <= margin || pos.x >= width - margin ||
-        pos.y <= margin || pos.y >= height - margin) {
+    if (pos.x <= margin || pos.x >= GAME_CONFIG.WIDTH - margin ||
+        pos.y <= top + margin || pos.y >= bottom - margin) {
       return false;
     }
 
@@ -309,25 +318,15 @@ export default class AIBlackboard {
   }
 
   /**
-   * 檢查位置及其周圍是否都可行走（用於確保坦克可以通過）
+   * 檢查坦克站在此位置時是否完全落在可行走地形（用於確保坦克可以通過）
+   * 與移動系統共用坦克佔地判定：±半格會剛好落在右 / 下相鄰格，造成左右不對稱
    * @param {Object} pos - 位置 { x, y }
    * @returns {boolean} 是否安全可行走
    * @private
    */
   _isPositionSafelyWalkable(pos) {
-    const tileSize = GAME_CONFIG.TILE_SIZE;
-    const halfTile = tileSize / 2;
-
-    // 檢查中心點和四個角落
-    const checkPoints = [
-      pos,
-      { x: pos.x - halfTile, y: pos.y - halfTile },
-      { x: pos.x + halfTile, y: pos.y - halfTile },
-      { x: pos.x - halfTile, y: pos.y + halfTile },
-      { x: pos.x + halfTile, y: pos.y + halfTile }
-    ];
-
-    return checkPoints.every(p => this._isPositionWalkable(p));
+    const map = this.scene.levelData && this.scene.levelData.map;
+    return GridMovement.isPositionWalkable(pos.x, pos.y, map);
   }
 
   /**
@@ -362,6 +361,15 @@ export default class AIBlackboard {
     }
 
     return null;
+  }
+
+  /**
+   * 釋放敵人的包抄位置（抵達或放棄包抄時呼叫）
+   * 不釋放會一直佔用同時包抄名額，其他敵人就無法再包抄
+   * @param {string} enemyId - 敵人 ID
+   */
+  releaseFlankingPosition(enemyId) {
+    this.flankingPositions.delete(enemyId);
   }
 
   /**
@@ -460,9 +468,10 @@ export default class AIBlackboard {
    * @private
    */
   _initializePatrolPoints() {
-    // 預設巡邏點 - 覆蓋地圖的關鍵區域
-    const width = 832;
-    const height = 832;
+    // 預設巡邏點 - 覆蓋地圖的關鍵區域（座標相對遊戲場，最後加上 HUD 偏移）
+    const width = GAME_CONFIG.WIDTH;
+    const height = GAME_CONFIG.PLAY_HEIGHT;
+    const offsetY = GAME_CONFIG.PLAY_OFFSET_Y;
     const margin = 80;
 
     // 候選巡邏點
@@ -486,7 +495,7 @@ export default class AIBlackboard {
     ];
 
     // 初始時先使用候選點，等地圖載入後會過濾
-    this.patrolPoints = candidatePoints;
+    this.patrolPoints = candidatePoints.map(p => ({ x: p.x, y: p.y + offsetY }));
     this._patrolPointsNeedValidation = true;
   }
 
@@ -523,8 +532,10 @@ export default class AIBlackboard {
   _generateWalkablePatrolPoints(count) {
     const points = [];
     const margin = 80;
-    const width = this.scene.game.config.width || 832;
-    const height = this.scene.game.config.height || 832;
+    // 限制在遊戲場內（畫布高度含 HUD，不可直接使用）
+    const width = GAME_CONFIG.WIDTH;
+    const height = GAME_CONFIG.PLAY_HEIGHT;
+    const offsetY = GAME_CONFIG.PLAY_OFFSET_Y;
     const maxAttempts = count * 20; // 最多嘗試次數
     let attempts = 0;
 
@@ -532,7 +543,7 @@ export default class AIBlackboard {
       attempts++;
       const candidate = {
         x: margin + Math.random() * (width - 2 * margin),
-        y: margin + Math.random() * (height - 2 * margin)
+        y: offsetY + margin + Math.random() * (height - 2 * margin)
       };
 
       // 檢查是否可行走且與現有點保持距離

@@ -268,6 +268,7 @@ export const AI_CONFIG = {
   FLANKING_ENABLED: true,       // 是否啟用包抄戰術
   FLANKING_DISTANCE: 120,       // 包抄距離
   MAX_FLANKING_ENEMIES: 2,      // 最大同時包抄敵人數
+  FLANK_SIDE_MEMORY: 8000,      // 記住上次包抄側的時間（ms）：期間內重新包抄沿用同一側，避免左右來回
 
   // 團隊協作
   TEAM_COORDINATION_ENABLED: true,  // 是否啟用團隊協作

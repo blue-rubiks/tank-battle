@@ -16,6 +16,21 @@ import AStar from '../utils/AStar';
 import GridMovement from '../utils/GridMovement';
 import { AI_CONFIG, GAME_CONFIG, TILE_TYPES, DIRECTION_VECTORS } from '../utils/Constants';
 
+// 依位移量決定朝向（位移為 0 時取 left / up）
+const towardX = (dx) => (dx > 0 ? 'right' : 'left');
+const towardY = (dy) => (dy > 0 ? 'down' : 'up');
+
+// 坦克可以安全進入的地形：空地、冰地、森林（地圖外為 undefined，不安全）
+const isSafeTile = (tile) => tile === TILE_TYPES.EMPTY || tile === TILE_TYPES.ICE || tile === TILE_TYPES.FOREST;
+
+// 方向翻轉診斷（只在開發模式啟用）：短時間內方向反覆翻轉時在 console 印出一次 AI 快照，
+// 用來追查「敵人卡住左右來回」是哪個決策分支在翻方向；正式建置與測試環境關閉
+// Stryker disable next-line StringLiteral,ConditionalExpression: 測試環境 NODE_ENV 為 test，怎麼改都是 false（等價）
+const FLIP_DIAGNOSTICS = process.env.NODE_ENV === 'development';
+const FLIP_WINDOW = 2000;          // 統計窗口（ms）
+const FLIP_WARN_COUNT = 6;         // 窗口內翻轉超過此次數才回報
+const FLIP_REPORT_INTERVAL = 5000; // 同一敵人兩次回報的最小間隔（ms）
+
 export default class EnemyAI {
   /**
    * 建構子
@@ -69,6 +84,10 @@ export default class EnemyAI {
     this.currentWaypointIndex = 0;
     this.waypointReachDistance = 16; // 到達路徑點的距離閾值
 
+    // 直線移動的沿牆繞行：首選方向被牆擋住時記下 { blocked: 被擋的方向, dir: 繞行方向 }，
+    // 擋住的方向還是不通、繞行方向仍可走就沿用，不每幀依 dx / dy 正負重選（否則會左右來回）
+    this.detour = null;
+
     // 路徑更新優化
     this.pathUpdateIntervalChase = 500; // 追逐狀態更頻繁更新
     this.pathUpdateIntervalPatrol = 1000; // 巡邏狀態較少更新
@@ -99,9 +118,18 @@ export default class EnemyAI {
     this.flankingEnabled = AI_CONFIG.FLANKING_ENABLED;
     this.isFlankingMode = false;
     this.flankingTarget = null;
+    // 上次包抄的那一側與時間：短時間內重新進入追逐時沿用同一側（選邊滯後）
+    this.lastFlankSide = null;
+    this.lastFlankTime = 0;
 
     // 團隊協作
     this.teamCoordinationEnabled = AI_CONFIG.TEAM_COORDINATION_ENABLED;
+
+    // 方向翻轉診斷（開發模式）
+    this.flipDiagnostics = FLIP_DIAGNOSTICS;
+    this.flipTimes = [];
+    this.lastTrackedDirection = this.desiredDirection;
+    this.lastFlipReport = null;
 
     // 初始化狀態
     this._initializeStates();
@@ -263,10 +291,11 @@ export default class EnemyAI {
         this.isFlankingMode = false;
         this.flankingTarget = null;
 
-        // 標記停止攻擊
+        // 標記停止攻擊，並釋放尚未抵達的包抄位置（否則會一直佔用包抄名額）
         const blackboard = this._getBlackboard();
         if (blackboard) {
           blackboard.markAsNotAttacking(this.id);
+          blackboard.releaseFlankingPosition(this.id);
         }
       }
     });
@@ -382,6 +411,9 @@ export default class EnemyAI {
 
     // 檢測卡住（只在有移動意圖時評估）
     this._checkIfStuck(delta);
+
+    // 方向翻轉診斷（開發模式才有輸出）
+    this._trackDirectionFlips(currentTime);
 
     // === 統一移動出口：只在這裡呼叫 move() / stop() ===
     if (this.wantsToMove) {
@@ -597,6 +629,8 @@ export default class EnemyAI {
     if (path && path.length > 0) {
       this.currentPath = AStar.simplifyPath(path);
       this.currentWaypointIndex = 0;
+      // 有路徑可走就不需要再沿牆繞行
+      this.detour = null;
     } else {
       this.currentPath = null;
     }
@@ -645,19 +679,19 @@ export default class EnemyAI {
     // 加入滯後效應：需要明顯差異才切換軸向（防止在對角線上抖動）
     const axisThreshold = 1.5; // dx 需要比 dy 大 1.5 倍才會選擇水平移動
     if (Math.abs(dx) > Math.abs(dy) * axisThreshold) {
-      newDirection = dx > 0 ? 'right' : 'left';
+      newDirection = towardX(dx);
     } else if (Math.abs(dy) > Math.abs(dx) * axisThreshold) {
-      newDirection = dy > 0 ? 'down' : 'up';
+      newDirection = towardY(dy);
     } else {
       // dx 和 dy 相近，優先維持當前軸向
       const currentDir = this.desiredDirection;
       if ((currentDir === 'left' || currentDir === 'right') && Math.abs(dx) > deadZone) {
-        newDirection = dx > 0 ? 'right' : 'left';
+        newDirection = towardX(dx);
       } else if ((currentDir === 'up' || currentDir === 'down') && Math.abs(dy) > deadZone) {
-        newDirection = dy > 0 ? 'down' : 'up';
+        newDirection = towardY(dy);
       } else {
         // 完全沒有偏好，選擇較大偏移的方向
-        newDirection = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+        newDirection = Math.abs(dx) > Math.abs(dy) ? towardX(dx) : towardY(dy);
       }
     }
 
@@ -679,25 +713,35 @@ export default class EnemyAI {
       return;
     }
 
+    // 繞行中：擋住的方向還是不通、繞行方向仍可走 → 繼續沿牆走
+    // 目標在正前方隔著牆時 dx 會在 0 附近變號，若每幀依正負重選就會在牆前左右來回
+    if (this.detour &&
+        !this._isDirectionSafe(this.detour.blocked) &&
+        this._isDirectionSafe(this.detour.dir)) {
+      this._setMoveIntent(this.detour.dir);
+      return;
+    }
+    this.detour = null;
+
     // 計算首選方向（加入滯後效應防止抖動）
     let primaryDir, secondaryDir;
     const axisThreshold = 1.5;
     const currentDir = this.desiredDirection;
 
     if (Math.abs(dx) > Math.abs(dy) * axisThreshold) {
-      primaryDir = dx > 0 ? 'right' : 'left';
-      secondaryDir = dy > 0 ? 'down' : 'up';
+      primaryDir = towardX(dx);
+      secondaryDir = towardY(dy);
     } else if (Math.abs(dy) > Math.abs(dx) * axisThreshold) {
-      primaryDir = dy > 0 ? 'down' : 'up';
-      secondaryDir = dx > 0 ? 'right' : 'left';
+      primaryDir = towardY(dy);
+      secondaryDir = towardX(dx);
     } else {
       // dx 和 dy 相近，優先維持當前軸向
       if (currentDir === 'left' || currentDir === 'right') {
-        primaryDir = dx > 0 ? 'right' : 'left';
-        secondaryDir = dy > 0 ? 'down' : 'up';
+        primaryDir = towardX(dx);
+        secondaryDir = towardY(dy);
       } else {
-        primaryDir = dy > 0 ? 'down' : 'up';
-        secondaryDir = dx > 0 ? 'right' : 'left';
+        primaryDir = towardY(dy);
+        secondaryDir = towardX(dx);
       }
     }
 
@@ -707,8 +751,9 @@ export default class EnemyAI {
       return;
     }
 
-    // 首選方向被阻擋，嘗試次要方向
+    // 首選方向被阻擋，改走次要方向並記為繞行，之後沿牆走到擋住的方向可通為止
     if (this._isDirectionSafe(secondaryDir)) {
+      this.detour = { blocked: primaryDir, dir: secondaryDir };
       this._setMoveIntent(secondaryDir);
       return;
     }
@@ -743,15 +788,9 @@ export default class EnemyAI {
     const gridX = Math.floor(checkX / tileSize);
     const gridY = Math.floor((checkY - offsetY) / tileSize);
 
-    // 邊界檢查
-    if (gridY < 0 || gridY >= map.length || gridX < 0 || gridX >= map[0].length) {
-      return false;
-    }
+    const tile = GridMovement.tileAt(map, gridX, gridY);
 
-    const tile = map[gridY][gridX];
-
-    // 安全的地形：空地、冰地、森林
-    return tile === TILE_TYPES.EMPTY || tile === TILE_TYPES.ICE || tile === TILE_TYPES.FOREST;
+    return isSafeTile(tile);
   }
 
   /**
@@ -778,9 +817,9 @@ export default class EnemyAI {
     let newDir;
 
     if (Math.abs(dx) > Math.abs(dy) * axisThreshold) {
-      newDir = dx > 0 ? 'left' : 'right';
+      newDir = towardX(-dx);
     } else if (Math.abs(dy) > Math.abs(dx) * axisThreshold) {
-      newDir = dy > 0 ? 'up' : 'down';
+      newDir = towardY(-dy);
     } else {
       // dx 和 dy 相近，維持當前方向
       return;
@@ -882,7 +921,7 @@ export default class EnemyAI {
   /**
    * 智能選擇最安全的移動方向
    * 基於地圖數據，選擇沒有障礙物的方向
-   * @returns {string|null} 最安全的方向，如果所有方向都有障礙則返回 null
+   * @returns {string} 最安全的方向（所有方向都有障礙時取扣分最少者）
    * @private
    */
   _chooseSafestDirection() {
@@ -914,30 +953,24 @@ export default class EnemyAI {
 
       let score = 0;
 
-      // 檢查前方一格
-      if (gridY1 >= 0 && gridY1 < map.length && gridX1 >= 0 && gridX1 < map[0].length) {
-        const tile1 = map[gridY1][gridX1];
-        if (tile1 === TILE_TYPES.EMPTY || tile1 === TILE_TYPES.ICE || tile1 === TILE_TYPES.FOREST) {
-          score += 10; // 前方一格安全
-        } else {
-          score -= 5; // 前方一格有障礙
-        }
+      // 檢查前方一格：安全 +10、有障礙 -5、超出邊界 -10
+      const tile1 = GridMovement.tileAt(map, gridX1, gridY1);
+      if (tile1 === undefined) {
+        score -= 10;
       } else {
-        score -= 10; // 超出邊界
+        score += isSafeTile(tile1) ? 10 : -5;
       }
 
-      // 檢查前方兩格（更遠的視野）
-      if (gridY2 >= 0 && gridY2 < map.length && gridX2 >= 0 && gridX2 < map[0].length) {
-        const tile2 = map[gridY2][gridX2];
-        if (tile2 === TILE_TYPES.EMPTY || tile2 === TILE_TYPES.ICE || tile2 === TILE_TYPES.FOREST) {
-          score += 5; // 前方兩格安全（獎勵較少）
-        }
+      // 檢查前方兩格（更遠的視野，獎勵較少；地圖外不加分）
+      if (isSafeTile(GridMovement.tileAt(map, gridX2, gridY2))) {
+        score += 5;
       }
 
       // 避免選擇當前方向的相反方向（避免來回振盪）
       const oppositeDirections = {
         'up': 'down',
         'down': 'up',
+        // Stryker disable next-line StringLiteral: right 在同分排序中本來就排最後，且各方向分數級距 ≥ 5，-3 懲罰不會改變結果（等價）
         'left': 'right',
         'right': 'left'
       };
@@ -948,18 +981,9 @@ export default class EnemyAI {
       return { dir, score };
     });
 
-    // 過濾掉得分為負的方向
-    const validDirections = directionScores.filter(d => d.score > 0);
-
-    if (validDirections.length === 0) {
-      // 所有方向都有障礙，選擇得分最高的
-      directionScores.sort((a, b) => b.score - a.score);
-      return directionScores[0].dir;
-    }
-
-    // 選擇得分最高的方向
-    validDirections.sort((a, b) => b.score - a.score);
-    return validDirections[0].dir;
+    // 選擇得分最高的方向（同分依 上 / 下 / 左 / 右 順序；全部受阻時同樣取最高分）
+    directionScores.sort((a, b) => b.score - a.score);
+    return directionScores[0].dir;
   }
 
   /**
@@ -1031,10 +1055,11 @@ export default class EnemyAI {
         this.stuckTime = 0;
         this.stuckTurned = false;
       } else if (this.stuckTime >= AI_CONFIG.STUCK_TURN_TIME && !this.stuckTurned) {
-        // 中度卡住：換一個可行走的方向
+        // 中度卡住：換一個可行走的方向（繞行方向可能被其他坦克擋住，一併重選）
         this.desiredDirection = this._pickEscapeDirection();
         this.lastDirectionChange = this.scene.time.now;
         this.currentPath = null;
+        this.detour = null;
         this.stuckTurned = true;
       }
     } else {
@@ -1063,6 +1088,65 @@ export default class EnemyAI {
 
     const others = ['up', 'down', 'left', 'right'].filter(dir => dir !== this.desiredDirection);
     return Phaser.Utils.Array.GetRandom(others);
+  }
+
+  /**
+   * 方向翻轉診斷：FLIP_WINDOW 內方向改變超過 FLIP_WARN_COUNT 次，
+   * 在 console 印出一次 AI 快照（同一敵人每 FLIP_REPORT_INTERVAL 最多一次）
+   * @param {number} currentTime - 目前時間
+   * @private
+   */
+  _trackDirectionFlips(currentTime) {
+    if (!this.flipDiagnostics) return;
+
+    if (this.desiredDirection !== this.lastTrackedDirection) {
+      this.lastTrackedDirection = this.desiredDirection;
+      this.flipTimes.push(currentTime);
+    }
+
+    // 只保留窗口內的翻轉
+    while (this.flipTimes.length > 0 && currentTime - this.flipTimes[0] > FLIP_WINDOW) {
+      this.flipTimes.shift();
+    }
+
+    const reportedRecently = this.lastFlipReport !== null &&
+      currentTime - this.lastFlipReport < FLIP_REPORT_INTERVAL;
+
+    if (this.flipTimes.length > FLIP_WARN_COUNT && !reportedRecently) {
+      this.lastFlipReport = currentTime;
+      console.warn('[EnemyAI] 方向反覆翻轉', this._debugSnapshot());
+    }
+  }
+
+  /**
+   * 目前決策狀態的快照（診斷輸出用）
+   * @returns {Object}
+   * @private
+   */
+  _debugSnapshot() {
+    const waypoint = this.currentPath ? this.currentPath[this.currentWaypointIndex] : null;
+    const { gridX, gridY } = GridMovement.pixelToGrid(this.tank.x, this.tank.y);
+
+    return {
+      id: this.id,
+      type: this.tank.enemyType,
+      state: this.stateMachine.currentState,
+      target: this.currentTarget,
+      flanking: this.isFlankingMode,
+      flankingTarget: this.flankingTarget,
+      patrolTarget: this.currentPatrolTarget,
+      hasPath: !!this.currentPath,
+      waypoint,
+      detour: this.detour,
+      direction: this.desiredDirection,
+      wantsToMove: this.wantsToMove,
+      stuckTime: this.stuckTime,
+      x: Math.round(this.tank.x),
+      y: Math.round(this.tank.y),
+      gridX,
+      gridY,
+      open: ['up', 'down', 'left', 'right'].filter(dir => this._isDirectionSafe(dir))
+    };
   }
 
   // ========== 事件處理 ==========
@@ -1211,14 +1295,12 @@ export default class EnemyAI {
     // 步數上限 = 棋盤距離，保證迴圈有界
     const maxSteps = dx + dy + 1;
 
+    // Stryker disable next-line EqualityOperator,UpdateOperator: 安全上限，一定會先抵達終點 break（等價）
     for (let step = 0; step < maxSteps; step++) {
-      // 檢查當前格子是否阻擋視線
-      if (y >= 0 && y < map.length && x >= 0 && x < map[0].length) {
-        const tile = map[y][x];
-        // 牆壁阻擋視線
-        if (tile === TILE_TYPES.BRICK || tile === TILE_TYPES.STEEL) {
-          return false;
-        }
+      // 檢查當前格子是否阻擋視線（牆壁阻擋；地圖外不阻擋）
+      const tile = GridMovement.tileAt(map, x, y);
+      if (tile === TILE_TYPES.BRICK || tile === TILE_TYPES.STEEL) {
+        return false;
       }
 
       // 到達終點
@@ -1325,14 +1407,14 @@ export default class EnemyAI {
     // 檢查是否在同一條線上（使用預測位置）
     if (Math.abs(dx) < tolerance) {
       // 垂直對齊，面向目標
-      const newDir = dy > 0 ? 'down' : 'up';
+      const newDir = towardY(dy);
       if (newDir !== this.desiredDirection) {
         this.lastDirectionChange = currentTime;
       }
       this._setMoveIntent(newDir);
     } else if (Math.abs(dy) < tolerance) {
       // 水平對齊
-      const newDir = dx > 0 ? 'right' : 'left';
+      const newDir = towardX(dx);
       if (newDir !== this.desiredDirection) {
         this.lastDirectionChange = currentTime;
       }
@@ -1396,47 +1478,14 @@ export default class EnemyAI {
   }
 
   /**
-   * 檢查目標位置是否可行走
+   * 檢查目標位置是否可行走（坦克站在此處時完全落在可行走地形）
+   * 與移動系統共用坦克佔地判定：±半格會剛好落在右 / 下相鄰格，造成左右不對稱
    * @param {Object} pos - 位置 { x, y }
    * @returns {boolean}
    * @private
    */
   _isTargetPositionWalkable(pos) {
-    if (!this.scene.levelData || !this.scene.levelData.map) {
-      return true;
-    }
-
-    const map = this.scene.levelData.map;
-    const tileSize = GAME_CONFIG.TILE_SIZE;
-    const offsetY = GAME_CONFIG.PLAY_OFFSET_Y;
-    const halfTile = tileSize / 2;
-
-    // 檢查中心點和四個角落
-    const checkPoints = [
-      pos,
-      { x: pos.x - halfTile, y: pos.y - halfTile },
-      { x: pos.x + halfTile, y: pos.y - halfTile },
-      { x: pos.x - halfTile, y: pos.y + halfTile },
-      { x: pos.x + halfTile, y: pos.y + halfTile }
-    ];
-
-    for (const point of checkPoints) {
-      const gridX = Math.floor(point.x / tileSize);
-      const gridY = Math.floor((point.y - offsetY) / tileSize);
-
-      // 邊界檢查
-      if (gridY < 0 || gridY >= map.length || gridX < 0 || gridX >= map[0].length) {
-        return false;
-      }
-
-      const tile = map[gridY][gridX];
-      // 不可行走的地形
-      if (tile === TILE_TYPES.BRICK || tile === TILE_TYPES.STEEL || tile === TILE_TYPES.WATER) {
-        return false;
-      }
-    }
-
-    return true;
+    return GridMovement.isPositionWalkable(pos.x, pos.y, this.scene.levelData?.map);
   }
 
   /**
@@ -1496,19 +1545,34 @@ export default class EnemyAI {
       return;
     }
 
-    // 計算包抄位置
-    const flankPos = blackboard.calculateFlankingPosition(
-      this.id,
-      { x: this.tank.x, y: this.tank.y }
-    );
+    // 計算包抄位置：記憶期間內優先沿用上次那一側
+    // （追逐 ↔ 攻擊每 2 秒切換一次，每次重新選邊都跟著玩家面向跳到另一側，敵人會左右來回）
+    const currentTime = this.scene.time.now;
+    const preferredSide = this._rememberedFlankSide(currentTime);
+    const flankPos = blackboard.calculateFlankingPosition(this.id, preferredSide);
 
     if (flankPos) {
       this.isFlankingMode = true;
       this.flankingTarget = flankPos;
+      this.lastFlankSide = flankPos.side || null;
+      this.lastFlankTime = currentTime;
     } else {
       this.isFlankingMode = false;
       this.flankingTarget = null;
     }
+  }
+
+  /**
+   * 取得仍在記憶期間內的上次包抄側
+   * @param {number} currentTime - 目前時間
+   * @returns {string|null} 包抄側，過期或尚未包抄過為 null
+   * @private
+   */
+  _rememberedFlankSide(currentTime) {
+    if (currentTime - this.lastFlankTime < AI_CONFIG.FLANK_SIDE_MEMORY) {
+      return this.lastFlankSide;
+    }
+    return null;
   }
 
   /**
@@ -1537,7 +1601,7 @@ export default class EnemyAI {
       // 清除黑板中的包抄位置
       const blackboard = this._getBlackboard();
       if (blackboard) {
-        blackboard.flankingPositions.delete(this.id);
+        blackboard.releaseFlankingPosition(this.id);
       }
 
       // 切換到攻擊狀態

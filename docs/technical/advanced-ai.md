@@ -105,8 +105,8 @@ _checkLineOfSight(from, to) {
 4. 上方（正面）- 最低優先
 
 ```javascript
-// 優先級排序
-_prioritizeFlankingPositions(positions, playerDirection) {
+// 優先級排序（有偏好側時該側排最前）
+_prioritizeFlankingPositions(positions, playerDirection, preferredSide) {
   const priorityMap = {
     'up': ['bottom', 'left', 'right', 'top'],
     'down': ['top', 'left', 'right', 'bottom'],
@@ -115,9 +115,14 @@ _prioritizeFlankingPositions(positions, playerDirection) {
 }
 ```
 
+**選邊滯後**：敵人會記住上次包抄的那一側（`FLANK_SIDE_MEMORY`，預設 8 秒）。
+追逐與攻擊狀態每 2 秒互相切換，若每次重新選邊都跟著玩家當下的面向，
+玩家一轉向敵人就會跳到另一側，在玩家左右來回而不逼近；記憶期間內沿用同一側即可避免。
+
 **效果**：
 - 敵人會嘗試從玩家的盲區攻擊
 - 最多 2 個敵人同時包抄，避免扎堆
+- 同一個敵人在短時間內維持同一側包抄，不會左右搖擺
 
 ### 5. 團隊協作 (Blackboard 架構)
 
@@ -159,6 +164,7 @@ export const AI_CONFIG = {
   FLANKING_ENABLED: true,
   FLANKING_DISTANCE: 120,
   MAX_FLANKING_ENEMIES: 2,
+  FLANK_SIDE_MEMORY: 8000,      // 記住上次包抄側的時間（ms）
 
   // 團隊協作
   TEAM_COORDINATION_ENABLED: true,
@@ -251,13 +257,13 @@ update(delta) {
 
 ### 滯後效應 (Hysteresis)
 
-方向選擇使用 **1.2x 滯後閾值** 避免在對角線上抖動：
+方向選擇使用 **1.5x 滯後閾值** 避免在對角線上抖動：
 
 ```javascript
 // 只有當 dx 明顯大於 dy 時才選擇水平移動
-if (Math.abs(dx) > Math.abs(dy) * 1.2) {
+if (Math.abs(dx) > Math.abs(dy) * 1.5) {
   newDir = dx > 0 ? 'right' : 'left';
-} else if (Math.abs(dy) > Math.abs(dx) * 1.2) {
+} else if (Math.abs(dy) > Math.abs(dx) * 1.5) {
   newDir = dy > 0 ? 'down' : 'up';
 } else {
   // 差異不大，維持當前方向
@@ -269,6 +275,32 @@ if (Math.abs(dx) > Math.abs(dy) * 1.2) {
 - ✅ 消除抖動問題
 - ✅ 方向變更更自然
 - ✅ 減少卡牆情況
+
+### 沿牆繞行滯後
+
+`_moveDirectly`（沒有 A* 路徑時的直線逼近，例如目標是被磚牆圍住的基地）在首選方向
+被牆擋住時改走垂直方向繞行。繞行方向一旦選定就記在 `detour`（被擋的方向 + 繞行方向），
+只要被擋的方向還是不通、繞行方向仍可走，就沿牆繼續走，不再每幀依 dx / dy 的正負重選：
+
+```javascript
+// 目標在正下方隔著牆：dx 在 0 附近變號，原本每幀都在左右之間切換
+if (this.detour &&
+    !this._isDirectionSafe(this.detour.blocked) &&
+    this._isDirectionSafe(this.detour.dir)) {
+  this._setMoveIntent(this.detour.dir); // 繼續沿牆走
+  return;
+}
+```
+
+被擋的方向變成可走（繞過牆角）、繞行方向被擋、兩個方向都被擋、找到 A* 路徑或
+卡住檢測換向時，都會清除 `detour` 重新選擇。
+
+### 方向翻轉診斷（開發模式）
+
+`npm run dev` 時若有敵人在 2 秒內改變方向超過 6 次，console 會印出一次該敵人的快照
+（狀態、目標、是否包抄、路徑點、繞行方向、位置與四周可走方向），同一敵人 5 秒內最多一次。
+遊戲中看到敵人卡住左右來回時，打開 DevTools 就能知道是哪個決策分支在翻方向。
+正式建置與測試環境（`NODE_ENV` 不是 `development`）完全關閉，不會有任何輸出。
 
 ## 狀態機
 
