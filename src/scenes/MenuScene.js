@@ -102,6 +102,9 @@ export default class MenuScene extends Phaser.Scene {
       easeParams: [2]
     });
 
+    // ===== 設定按鈕 =====
+    const settingsButton = this.createSettingsButton(width / 2, buttonY + 130);
+
     // ===== 底部鍵盤提示 =====
     this.drawKeyboardHints(width, height);
 
@@ -118,9 +121,44 @@ export default class MenuScene extends Phaser.Scene {
       color: HEX.INK_3
     }).setOrigin(1, 0).setLetterSpacing(3);
 
+    // Stryker restore all
+    settingsButton.on('pointerdown', () => this.openSettings());
+
     // ===== 鍵盤輸入 =====
     this.input.keyboard.on('keydown-ENTER', () => this.startGame(currentLevel));
     this.input.keyboard.on('keydown-SPACE', () => this.startGame(currentLevel));
+    this.input.keyboard.on('keydown-S', () => this.openSettings());
+  }
+
+  /**
+   * 次要按鈕：設定（透明底 + 深金邊）
+   * @returns {Phaser.GameObjects.Rectangle} 可點擊的按鈕本體
+   */
+  createSettingsButton(cx, cy) {
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
+    const bg = this.add.rectangle(cx, cy, 220, 40, PALETTE.BG_1).setInteractive({ useHandCursor: true });
+    bg.setStrokeStyle(2, PALETTE.GOLD_DEEP);
+    const label = this.add.text(cx, cy, '設  定  [S]', {
+      fontFamily: TEXT_STYLES.BTN_SECONDARY.fontFamily,
+      fontSize: '12px',
+      color: HEX.INK_1,
+      padding: { x: 0, y: 3 }
+    }).setOrigin(0.5).setLetterSpacing(4);
+
+    bg.on('pointerover', () => {
+      bg.setStrokeStyle(2, PALETTE.GOLD);
+      label.setColor(HEX.GOLD_2);
+    });
+    bg.on('pointerout', () => {
+      bg.setStrokeStyle(2, PALETTE.GOLD_DEEP);
+      label.setColor(HEX.INK_1);
+    });
+    // Stryker restore all
+    return bg;
+  }
+
+  openSettings() {
+    this.scene.start(SCENES.SETTINGS);
   }
 
   /**

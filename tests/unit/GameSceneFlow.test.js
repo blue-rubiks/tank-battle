@@ -275,6 +275,29 @@ describe('GameScene.create - 完整建立流程', () => {
     expect(scene.scene.launch).toHaveBeenCalledWith(SCENES.PAUSE);
   });
 
+  test('按 P 暫停前應該先停掉引擎聲（暫停後 update 不再執行）', () => {
+    const loop = jest.spyOn(scene.audioManager, 'setLoop');
+    const [, handler] = scene.pauseKey.on.mock.calls[0];
+
+    handler();
+
+    expect(loop).toHaveBeenCalledWith('move', false);
+    expect(loop.mock.invocationCallOrder[0]).toBeLessThan(scene.scene.pause.mock.invocationCallOrder[0]);
+  });
+
+  test('應該依存檔設定的難度與音量建立系統', () => {
+    new SaveManager().updateSettings({ difficulty: 'hard', sfxVolume: 0.3, musicVolume: 0.9 });
+    const configured = makeGameScene({ levelData: makeLevel() });
+    configured.init({ level: 2 });
+    configured.create();
+
+    expect(configured.difficulty).toBe('hard');
+    expect(configured.audioManager.sfxVolume).toBe(0.3);
+    expect(configured.audioManager.musicVolume).toBe(0.9);
+    // 開場音樂依音樂音量播放
+    expect(configured.sound.play).toHaveBeenCalledWith('gamestart', { volume: 0.9 });
+  });
+
   test('按 Tab 應該切換 HUD', () => {
     const toggle = jest.spyOn(scene, 'toggleUI');
     const [event, handler] = scene.toggleUIKey.on.mock.calls[0];
@@ -1528,6 +1551,29 @@ describe('GameScene.update - 每幀更新', () => {
 
     expect(() => scene.update(2000, 16)).not.toThrow();
   });
+
+  test('按住方向鍵時播放引擎聲，放開後停止', () => {
+    const loop = jest.spyOn(scene.audioManager, 'setLoop');
+    jest.spyOn(scene, 'applyPlayerGridLock').mockImplementation(() => {});
+
+    scene.cursors.up.isDown = true;
+    scene.update(2000, 16);
+    expect(loop).toHaveBeenLastCalledWith('move', true);
+
+    scene.cursors.up.isDown = false;
+    scene.update(2016, 16);
+    expect(loop).toHaveBeenLastCalledWith('move', false);
+  });
+
+  test('玩家陣亡（不活躍）時停止引擎聲', () => {
+    const loop = jest.spyOn(scene.audioManager, 'setLoop');
+    scene.cursors.up.isDown = true;
+    scene.player.active = false;
+
+    scene.update(2000, 16);
+
+    expect(loop).toHaveBeenLastCalledWith('move', false);
+  });
 });
 
 describe('GameScene.handlePlayerInput', () => {
@@ -1666,6 +1712,17 @@ describe('GameScene.shutdown', () => {
     expect(bullet.destroy).toHaveBeenCalled();
     expect(scene.bulletPool.getStats().totalSize).toBe(0);
     expect(scene.aiBlackboard.threatLevel).toBe(0);
+  });
+
+  test('應該停止所有循環音效（引擎聲）', () => {
+    const scene = makeGameScene({ levelData: makeLevel() });
+    scene.init({ level: 2 });
+    scene.create();
+    const destroy = jest.spyOn(scene.audioManager, 'destroy');
+
+    scene.shutdown();
+
+    expect(destroy).toHaveBeenCalled();
   });
 
   test('系統尚未初始化時也能清理', () => {

@@ -216,7 +216,22 @@ export const SCENES = {
   GAME: 'GameScene',
   PAUSE: 'PauseScene',
   GAME_OVER: 'GameOverScene',
-  LEVEL_COMPLETE: 'LevelCompleteScene'
+  LEVEL_COMPLETE: 'LevelCompleteScene',
+  SETTINGS: 'SettingsScene'
+};
+
+// 設定預設值（存檔與音效管理器共用；音量 0~1）
+export const DEFAULT_SETTINGS = {
+  musicVolume: 0.5,
+  sfxVolume: 0.7,
+  difficulty: 'normal'
+};
+
+// 難度：只調整敵人的移動速度與射擊間隔倍率，普通為原始數值
+export const DIFFICULTY = {
+  easy: { key: 'easy', label: '簡單', enemySpeed: 0.8, enemyFireInterval: 1.5 },
+  normal: { key: 'normal', label: '普通', enemySpeed: 1, enemyFireInterval: 1 },
+  hard: { key: 'hard', label: '困難', enemySpeed: 1.2, enemyFireInterval: 0.7 }
 };
 
 // 深度層級（渲染順序）

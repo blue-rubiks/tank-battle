@@ -101,10 +101,8 @@ export default class GameScene extends Phaser.Scene {
     this.updateLevel(this.currentLevel);
     this.updateEnemies();
 
-    // 播放遊戲開始音效
-    if (this.audioManager && this.audioManager.playSFX) {
-      this.audioManager.playSFX('gamestart', 0.5);
-    }
+    // 播放開場音樂（音效管理器已於 initializeSystems 建立）
+    this.audioManager.playJingle('gamestart');
   }
 
   // ==========================================
@@ -118,8 +116,12 @@ export default class GameScene extends Phaser.Scene {
       this.saveManager.recordGameStart();
     }
 
+    // 設定畫面的音量與難度（難度由 EnemyTank 讀取）
+    const settings = this.saveManager.getSettings();
+    this.difficulty = settings.difficulty;
+
     // 音效管理器
-    this.audioManager = new AudioManager(this);
+    this.audioManager = new AudioManager(this, settings);
 
     // 碰撞系統
     this.collisionSystem = new CollisionSystem(this);
@@ -952,8 +954,9 @@ export default class GameScene extends Phaser.Scene {
     this.pauseKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
     this.toggleUIKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB);
 
-    // 暫停
+    // 暫停（場景暫停後 update 不再執行，先停掉引擎聲）
     this.pauseKey.on('down', () => {
+      this.audioManager.setLoop('move', false);
       this.scene.pause();
       this.scene.launch(SCENES.PAUSE);
     });
@@ -1351,10 +1354,11 @@ export default class GameScene extends Phaser.Scene {
   // 視覺效果方法
   // ==========================================
 
+  // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
   createExplosion(x, y) {
     // 播放爆炸音效
     if (this.audioManager && this.audioManager.playSFX) {
-      this.audioManager.playSFX('explosion', 0.6);
+      this.audioManager.playSFX('explosion', 0.85);
     }
 
     // 創建多層爆炸效果，更像經典坦克大戰
@@ -1402,7 +1406,7 @@ export default class GameScene extends Phaser.Scene {
   createHitEffect(x, y) {
     // 播放擊中音效
     if (this.audioManager && this.audioManager.playSFX) {
-      this.audioManager.playSFX('hit', 0.4);
+      this.audioManager.playSFX('hit', 0.6);
     }
 
     // 改進擊中特效：閃光 + 小爆裂
@@ -1515,10 +1519,13 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // 更新玩家
+    let playerMoving = false;
     if (this.player && this.player.active) {
-      this.handlePlayerInput();
+      playerMoving = this.handlePlayerInput();
       this.player.update(time, delta);
     }
+    // 按住方向鍵時持續播放引擎聲；放開或陣亡時停止
+    this.audioManager.setLoop('move', playerMoving);
 
     // 更新敵人
     this.enemies.getChildren().forEach(enemy => {
@@ -1726,6 +1733,11 @@ export default class GameScene extends Phaser.Scene {
     // 清理 AI 黑板
     if (this.aiBlackboard) {
       this.aiBlackboard.clear();
+    }
+
+    // 停止循環音效（引擎聲）
+    if (this.audioManager) {
+      this.audioManager.destroy();
     }
   }
 }

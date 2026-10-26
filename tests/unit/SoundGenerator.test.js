@@ -1,222 +1,206 @@
 /**
- * SoundGenerator 音效生成器單元測試
- * 測試 8-bit 復古音效生成邏輯
+ * SoundGenerator 音效生成器單元測試（真實實作）
+ * 以固定亂數與小取樣率產生波形，鎖定目前 8-bit 音效的輸出（特性測試）。
+ * 若刻意調整音色，請重新產生下方的黃金值。
  */
 
+import SoundGenerator from '../../src/utils/SoundGenerator';
+
+const SAMPLE_RATE = 1000;
+
+const makeScene = () => {
+  const cache = new Map();
+  const context = {
+    sampleRate: SAMPLE_RATE,
+    createBuffer: jest.fn((channels, size, rate) => {
+      const data = new Float32Array(Math.floor(size));
+      return {
+        channels,
+        size,
+        rate,
+        data,
+        getChannelData: jest.fn(() => data)
+      };
+    }),
+    createBufferSource: jest.fn(() => ({ buffer: null }))
+  };
+
+  return {
+    sound: { context },
+    cache: {
+      audio: {
+        exists: jest.fn(key => cache.has(key)),
+        add: jest.fn((key, buffer) => cache.set(key, buffer))
+      }
+    }
+  };
+};
+
+const summarize = (buffer) => {
+  let sum = 0;
+  let abs = 0;
+  buffer.data.forEach(v => {
+    sum += v;
+    abs += Math.abs(v);
+  });
+  return { sum, abs };
+};
+
+// 以 Math.random = 0.75（噪音 = 0.5）、取樣率 1000Hz 產生的黃金值
+const GOLDEN = {
+  Shoot: { size: 150, sum: 1.9682691, abs: 9.8713777, s1: -0.1617328, s7: 0.2216863 },
+  Explosion: { size: 400, sum: 18.53861, abs: 30.870346, s1: 0.0145123, s7: 0.02809309 },
+  Hit: { size: 100, sum: 2.9381749, abs: 3.134076, s1: 0.1644966, s7: 0.1418379 },
+  PowerUp: { size: 300, sum: -1.0283333, abs: 37.375, s1: -0.2491667, s7: -0.2441667 },
+  Move: { size: 500, sum: 1.265625, abs: 12.567579, s1: 0.0216804, s7: -0.01266163 },
+  GameStart: { size: 500, sum: -1.3111999, abs: 74.85, s1: 0.1998, s7: -0.1986 },
+  EnemyDestroy: { size: 350, sum: 2.1877882, abs: 34.279566, s1: -0.1810923, s7: 0.2298141 }
+};
+
 describe('SoundGenerator - 音效生成器', () => {
-  describe('音效基本參數', () => {
-    test('射擊音效應該有正確的參數', () => {
-      const shootSound = {
-        duration: 0.15,
-        startFreq: 800,
-        endFreq: 200,
-        waveform: 'square',
-        hasNoise: true,
-        volume: 0.3
-      };
+  let scene;
 
-      expect(shootSound.duration).toBe(0.15);
-      expect(shootSound.startFreq).toBeGreaterThan(shootSound.endFreq);
-      expect(shootSound.waveform).toBe('square');
-      expect(shootSound.hasNoise).toBe(true);
-    });
-
-    test('爆炸音效應該有正確的參數', () => {
-      const explosionSound = {
-        duration: 0.4,
-        startFreq: 300,
-        endFreq: 50,
-        hasRumble: true,
-        volume: 0.5
-      };
-
-      expect(explosionSound.duration).toBe(0.4);
-      expect(explosionSound.startFreq).toBeGreaterThan(explosionSound.endFreq);
-      expect(explosionSound.hasRumble).toBe(true);
-    });
-
-    test('擊中音效應該有正確的參數', () => {
-      const hitSound = {
-        duration: 0.1,
-        startFreq: 1200,
-        waveform: 'square',
-        fastDecay: true
-      };
-
-      expect(hitSound.duration).toBe(0.1);
-      expect(hitSound.startFreq).toBeGreaterThan(1000);
-      expect(hitSound.fastDecay).toBe(true);
-    });
-
-    test('遊戲開始音效應該有正確的音階', () => {
-      const gameStartSound = {
-        duration: 0.5,
-        notes: ['C4', 'E4', 'G4', 'C5'],
-        waveform: 'square'
-      };
-
-      expect(gameStartSound.notes.length).toBe(4);
-      expect(gameStartSound.notes).toContain('C4');
-      expect(gameStartSound.notes).toContain('C5');
-    });
-
-    test('道具收集音效應該有正確的音階', () => {
-      const powerUpSound = {
-        duration: 0.3,
-        notes: ['C5', 'E5', 'G5'],
-        waveform: 'square'
-      };
-
-      expect(powerUpSound.notes.length).toBe(3);
-      expect(powerUpSound.notes[0]).toBe('C5');
-    });
+  beforeEach(() => {
+    scene = makeScene();
+    jest.spyOn(Math, 'random').mockReturnValue(0.75);
   });
 
-  describe('音效生成邏輯', () => {
-    test('應該生成指定時長的音效緩衝區', () => {
-      const sampleRate = 44100; // 標準採樣率
-      const duration = 0.15;
-      const bufferSize = sampleRate * duration;
-
-      expect(bufferSize).toBe(6615);
-    });
-
-    test('頻率掃描應該正確計算', () => {
-      const startFreq = 800;
-      const endFreq = 200;
-      const progress = 0.5; // 50% 進度
-
-      // 指數衰減
-      const currentFreq = startFreq * Math.exp(-progress * Math.log(startFreq / endFreq));
-
-      expect(currentFreq).toBeGreaterThan(endFreq);
-      expect(currentFreq).toBeLessThan(startFreq);
-    });
-
-    test('包絡應該正確計算（指數衰減）', () => {
-      const time = 0.1;
-      const decayRate = 20;
-      const envelope = Math.exp(-time * decayRate);
-
-      expect(envelope).toBeGreaterThan(0);
-      expect(envelope).toBeLessThan(1);
-    });
-
-    test('方波應該正確生成', () => {
-      const frequency = 440; // A4
-      const time = 0.001;
-      const square = Math.sign(Math.sin(2 * Math.PI * frequency * time));
-
-      expect([-1, 1]).toContain(square);
-    });
-
-    test('噪音應該在正確範圍內', () => {
-      const noise = (Math.random() * 2 - 1) * 0.3;
-
-      expect(noise).toBeGreaterThanOrEqual(-0.3);
-      expect(noise).toBeLessThanOrEqual(0.3);
-    });
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
-  describe('音符頻率轉換', () => {
-    test('應該正確轉換音符到頻率', () => {
-      // A4 = 440 Hz (標準音)
-      const A4_FREQUENCY = 440;
+  describe.each(Object.entries(GOLDEN))('generate%sSound', (name, golden) => {
+    let buffer;
 
-      // C4 = A4 * 2^(-9/12) ≈ 261.63 Hz
-      const C4_FREQUENCY = A4_FREQUENCY * Math.pow(2, -9/12);
-
-      expect(C4_FREQUENCY).toBeCloseTo(261.63, 1);
+    beforeEach(() => {
+      buffer = SoundGenerator[`generate${name}Sound`](scene);
     });
 
-    test('音符頻率對照表應該正確', () => {
-      const NOTE_FREQUENCIES = {
-        'C4': 261.63,
-        'E4': 329.63,
-        'G4': 392.00,
-        'C5': 523.25,
-        'E5': 659.25,
-        'G5': 783.99
-      };
-
-      expect(NOTE_FREQUENCIES['C4']).toBeCloseTo(261.63, 1);
-      expect(NOTE_FREQUENCIES['A4']).toBeUndefined();
-      expect(NOTE_FREQUENCIES['C5']).toBeGreaterThan(NOTE_FREQUENCIES['C4']);
-    });
-  });
-
-  describe('所有音效類型', () => {
-    test('應該包含所有必要的音效', () => {
-      const soundTypes = [
-        'shoot',
-        'explosion',
-        'hit',
-        'powerup',
-        'move',
-        'gamestart',
-        'enemydestroy'
-      ];
-
-      expect(soundTypes).toHaveLength(7);
-      expect(soundTypes).toContain('shoot');
-      expect(soundTypes).toContain('explosion');
-      expect(soundTypes).toContain('hit');
+    test('應該建立單聲道、指定時長的緩衝區', () => {
+      expect(scene.sound.context.createBuffer).toHaveBeenCalledWith(1, golden.size, SAMPLE_RATE);
+      expect(buffer.getChannelData).toHaveBeenCalledWith(0);
     });
 
-    test('敵人摧毀音效應該有下降音調', () => {
-      const enemyDestroySound = {
-        duration: 0.35,
-        startFreq: 600,
-        endFreq: 100,
-        hasNoise: true,
-        descendingTone: true
-      };
+    test('波形應該與黃金值一致', () => {
+      const { sum, abs } = summarize(buffer);
 
-      expect(enemyDestroySound.descendingTone).toBe(true);
-      expect(enemyDestroySound.startFreq).toBeGreaterThan(enemyDestroySound.endFreq);
+      expect(sum).toBeCloseTo(golden.sum, 4);
+      expect(abs).toBeCloseTo(golden.abs, 4);
+      expect(buffer.data[1]).toBeCloseTo(golden.s1, 6);
+      expect(buffer.data[7]).toBeCloseTo(golden.s7, 6);
     });
 
-    test('移動音效應該有低頻引擎聲', () => {
-      const moveSound = {
-        frequency: 80,
-        isLowFrequency: true,
-        hasRumble: true,
-        volume: 0.15
-      };
-
-      expect(moveSound.frequency).toBeLessThan(100);
-      expect(moveSound.isLowFrequency).toBe(true);
-      expect(moveSound.volume).toBeLessThanOrEqual(0.2);
-    });
-  });
-
-  describe('音量控制', () => {
-    test('所有音效音量應該在安全範圍內', () => {
-      const volumes = {
-        shoot: 0.3,
-        explosion: 0.6,
-        hit: 0.4,
-        powerup: 0.5,
-        gamestart: 0.5,
-        enemydestroy: 0.5
-      };
-
-      Object.values(volumes).forEach(volume => {
-        expect(volume).toBeGreaterThan(0);
-        expect(volume).toBeLessThanOrEqual(1);
+    test('音量應該在安全範圍內（不爆音）', () => {
+      buffer.data.forEach(v => {
+        expect(Math.abs(v)).toBeLessThanOrEqual(0.5);
       });
     });
+  });
 
-    test('應該防止音頻過載', () => {
-      const signal = 0.8;
-      const noise = 0.3;
-      const combined = signal + noise;
+  describe('音色特性', () => {
+    test('移動音效以 250ms 為週期重複（0.5 秒剛好兩個週期），循環播放時接縫不爆音', () => {
+      const buffer = SoundGenerator.generateMoveSound(scene);
 
-      // 如果超過 1.0 應該進行限制
-      const clampedSignal = Math.max(-1, Math.min(1, combined));
+      // 取樣率 1000Hz：80Hz 每 12.5 個取樣一週期、4Hz 脈動每 250 個取樣一週期
+      for (let i = 0; i < 250; i++) {
+        expect(buffer.data[i + 250]).toBeCloseTo(buffer.data[i], 6);
+      }
+    });
 
-      expect(clampedSignal).toBeLessThanOrEqual(1);
-      expect(clampedSignal).toBeGreaterThanOrEqual(-1);
+    test('射擊音效在第一個取樣只有噪音（方波為 0）', () => {
+      const buffer = SoundGenerator.generateShootSound(scene);
+
+      // noise = (0.75 * 2 - 1) * 0.3 = 0.15，envelope = 1，× 0.3
+      expect(buffer.data[0]).toBeCloseTo(0.045, 6);
+    });
+
+    test('爆炸音效應該從 0 起音（attack）', () => {
+      const buffer = SoundGenerator.generateExplosionSound(scene);
+
+      expect(buffer.data[0]).toBe(0);
+    });
+
+    test('擊中音效應該快速衰減', () => {
+      const buffer = SoundGenerator.generateHitSound(scene);
+
+      expect(Math.abs(buffer.data[90])).toBeLessThan(Math.abs(buffer.data[1]));
+    });
+
+    test.each([
+      [0, 523],
+      [99, 523],
+      [100, 659],
+      [199, 659],
+      [200, 784],
+      [299, 784]
+    ])('道具音效第 %i 個取樣使用 %iHz（C5 → E5 → G5）', (index, freq) => {
+      const buffer = SoundGenerator.generatePowerUpSound(scene);
+      const t = index / SAMPLE_RATE;
+      const expected = Math.sign(Math.sin(2 * Math.PI * freq * t)) * (1 - t / 0.3) * 0.25;
+
+      expect(buffer.data[index]).toBeCloseTo(expected, 6);
+    });
+
+    test.each([
+      [124, 262],
+      [125, 330],
+      [249, 330],
+      [250, 392],
+      [374, 392],
+      [375, 523]
+    ])('開場音效第 %i 個取樣使用 %iHz（C4 → E4 → G4 → C5）', (index, freq) => {
+      const buffer = SoundGenerator.generateGameStartSound(scene);
+      const t = index / SAMPLE_RATE;
+      const expected = Math.sign(Math.sin(2 * Math.PI * freq * t)) * (1 - (t / 0.5) * 0.5) * 0.2;
+
+      expect(buffer.data[index]).toBeCloseTo(expected, 6);
+    });
+  });
+
+  describe('快取', () => {
+    test('addBufferToCache 應該在快取不存在時加入', () => {
+      const buffer = { id: 'b' };
+
+      SoundGenerator.addBufferToCache(scene, 'shoot', buffer);
+
+      expect(scene.sound.context.createBufferSource).toHaveBeenCalledTimes(1);
+      expect(scene.cache.audio.exists).toHaveBeenCalledWith('shoot');
+      expect(scene.cache.audio.add).toHaveBeenCalledWith('shoot', buffer);
+    });
+
+    test('addBufferToCache 應該把緩衝區掛到音源上', () => {
+      const source = { buffer: null };
+      scene.sound.context.createBufferSource.mockReturnValue(source);
+      const buffer = { id: 'b' };
+
+      SoundGenerator.addBufferToCache(scene, 'shoot', buffer);
+
+      expect(source.buffer).toBe(buffer);
+    });
+
+    test('addBufferToCache 不應該覆蓋既有快取', () => {
+      SoundGenerator.addBufferToCache(scene, 'shoot', { id: 'first' });
+      SoundGenerator.addBufferToCache(scene, 'shoot', { id: 'second' });
+
+      expect(scene.cache.audio.add).toHaveBeenCalledTimes(1);
+      expect(scene.cache.audio.add).toHaveBeenCalledWith('shoot', { id: 'first' });
+    });
+
+    test('generateAllSounds 應該產生並快取所有 7 種音效', () => {
+      const sounds = SoundGenerator.generateAllSounds(scene);
+      const keys = ['shoot', 'explosion', 'hit', 'powerup', 'move', 'gamestart', 'enemydestroy'];
+
+      expect(Object.keys(sounds)).toEqual(keys);
+      keys.forEach(key => {
+        expect(scene.cache.audio.add).toHaveBeenCalledWith(key, sounds[key]);
+      });
+      expect(sounds.shoot.size).toBe(GOLDEN.Shoot.size);
+      expect(sounds.explosion.size).toBe(GOLDEN.Explosion.size);
+      expect(sounds.hit.size).toBe(GOLDEN.Hit.size);
+      expect(sounds.powerup.size).toBe(GOLDEN.PowerUp.size);
+      expect(sounds.move.size).toBe(GOLDEN.Move.size);
+      expect(sounds.gamestart.size).toBe(GOLDEN.GameStart.size);
+      expect(sounds.enemydestroy.size).toBe(GOLDEN.EnemyDestroy.size);
     });
   });
 });

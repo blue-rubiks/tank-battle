@@ -3,21 +3,28 @@
  * 管理所有音效與音樂
  */
 
+import { DEFAULT_SETTINGS } from '../utils/Constants';
+
 export default class AudioManager {
   /**
    * 建構子
    * @param {Phaser.Scene} scene - 場景
+   * @param {Object} settings - 存檔中的設定（musicVolume / sfxVolume，0~1）
    */
-  constructor(scene) {
+  constructor(scene, settings = {}) {
     this.scene = scene;
 
-    // 音效設定
-    this.sfxVolume = 0.5;
-    this.musicVolume = 0.3;
+    // 音量設定（設定畫面可調）；實際音量 = 個別音效的相對音量 × 這裡的音量
+    const volumes = { ...DEFAULT_SETTINGS, ...settings };
+    this.sfxVolume = volumes.sfxVolume;
+    this.musicVolume = volumes.musicVolume;
     this.isMuted = false;
 
     // 當前播放的音樂
     this.currentMusic = null;
+
+    // 循環播放中的音效（如坦克引擎聲），依鍵值保存
+    this.loops = {};
 
     // 音效快取
     this.sounds = {};
@@ -26,21 +33,57 @@ export default class AudioManager {
   /**
    * 播放音效
    * @param {string} key - 音效鍵值
-   * @param {number} volume - 音量（可選）
+   * @param {number} mix - 相對音量（0~1，會再乘上音效音量）
    */
-  playSFX(key, volume = this.sfxVolume) {
-    if (this.isMuted) return;
+  playSFX(key, mix = 0.7) {
+    this._play(key, mix * this.sfxVolume);
+  }
 
-    // 檢查音效是否已載入
-    if (!this.scene.cache.audio.exists(key)) {
-      // 音效未載入，跳過
+  /**
+   * 播放短曲（如開場音樂），音量依「音樂音量」
+   * @param {string} key - 音效鍵值
+   * @param {number} mix - 相對音量（0~1，會再乘上音樂音量）
+   */
+  playJingle(key, mix = 1) {
+    this._play(key, mix * this.musicVolume);
+  }
+
+  /**
+   * 播放一次性音效；靜音、音量為 0 或尚未載入時略過
+   * @private
+   */
+  _play(key, volume) {
+    if (this.isMuted || volume <= 0) return;
+    if (!this.scene.cache.audio.exists(key)) return;
+
+    this.scene.sound.play(key, { volume });
+  }
+
+  /**
+   * 開始或停止循環音效（重複開始不會疊加）
+   * @param {string} key - 音效鍵值
+   * @param {boolean} playing - true 開始、false 停止
+   * @param {number} mix - 相對音量（0~1，會再乘上音效音量）
+   */
+  setLoop(key, playing, mix = 1) {
+    const current = this.loops[key];
+
+    if (!playing) {
+      if (current) {
+        current.stop();
+        current.destroy();
+        delete this.loops[key];
+      }
       return;
     }
 
-    // 播放音效
-    this.scene.sound.play(key, {
-      volume: volume
-    });
+    const volume = mix * this.sfxVolume;
+    if (current || this.isMuted || volume <= 0) return;
+    if (!this.scene.cache.audio.exists(key)) return;
+
+    const sound = this.scene.sound.add(key, { loop: true, volume });
+    sound.play();
+    this.loops[key] = sound;
   }
 
   /**
@@ -137,6 +180,7 @@ export default class AudioManager {
    */
   destroy() {
     this.stopMusic();
+    Object.keys(this.loops).forEach(key => this.setLoop(key, false));
     this.sounds = {};
   }
 }

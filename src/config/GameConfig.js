@@ -13,6 +13,7 @@ import GameScene from '../scenes/GameScene';
 import PauseScene from '../scenes/PauseScene';
 import GameOverScene from '../scenes/GameOverScene';
 import LevelCompleteScene from '../scenes/LevelCompleteScene';
+import SettingsScene from '../scenes/SettingsScene';
 
 const config = {
   type: Phaser.AUTO,
@@ -37,7 +38,8 @@ const config = {
     GameScene,
     PauseScene,
     GameOverScene,
-    LevelCompleteScene
+    LevelCompleteScene,
+    SettingsScene
   ],
 
   scale: {

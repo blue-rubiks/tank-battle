@@ -3,7 +3,7 @@
  */
 
 import EnemyTank from '../../src/entities/EnemyTank';
-import { ENEMY_TYPES, EVENTS } from '../../src/utils/Constants';
+import { ENEMY_TYPES, EVENTS, DIFFICULTY } from '../../src/utils/Constants';
 
 const makeMockScene = () => ({
   add: { existing: jest.fn() },
@@ -47,6 +47,28 @@ describe('EnemyTank', () => {
       expect(enemy.tintTopLeft).toBe(config.color);
       expect(enemy.baseTint).toBe(config.color);
       expect(enemy.aiController).toBeNull();
+    });
+
+    test.each([
+      ['easy', 0.8, 1.5],
+      ['normal', 1, 1],
+      ['hard', 1.2, 0.7]
+    ])('難度 %s 應該把移動速度乘以 %d、射擊間隔乘以 %d', (difficulty, speedRate, fireRate) => {
+      scene.difficulty = difficulty;
+      const enemy = new EnemyTank(scene, 0, 0, 'FAST');
+
+      expect(DIFFICULTY[difficulty].enemySpeed).toBe(speedRate);
+      expect(DIFFICULTY[difficulty].enemyFireInterval).toBe(fireRate);
+      expect(enemy.speed).toBeCloseTo(ENEMY_TYPES.FAST.speed * speedRate, 6);
+      expect(enemy.fireRate).toBeCloseTo(ENEMY_TYPES.FAST.fireRate * fireRate, 6);
+    });
+
+    test('未知難度視為普通', () => {
+      scene.difficulty = 'nightmare';
+      const enemy = new EnemyTank(scene, 0, 0, 'POWER');
+
+      expect(enemy.speed).toBe(ENEMY_TYPES.POWER.speed);
+      expect(enemy.fireRate).toBe(ENEMY_TYPES.POWER.fireRate);
     });
 
     test('預設類型為 BASIC', () => {
@@ -237,7 +259,7 @@ describe('EnemyTank', () => {
 
       expect(scene.player.addScore).toHaveBeenCalledWith(ENEMY_TYPES.FAST.score);
       expect(scene.events.emit).toHaveBeenCalledWith(EVENTS.ENEMY_DESTROYED, enemy);
-      expect(scene.audioManager.playSFX).toHaveBeenCalledWith('enemydestroy', 0.5);
+      expect(scene.audioManager.playSFX).toHaveBeenCalledWith('enemydestroy', 0.7);
       expect(scene.createExplosion).toHaveBeenCalledWith(40, 50);
       expect(enemy.isDestroyed).toBe(true);
       expect(scene.spawnPowerUp).not.toHaveBeenCalled();

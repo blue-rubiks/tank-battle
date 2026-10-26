@@ -3,7 +3,7 @@
  * 使用 LocalStorage 儲存遊戲進度、分數等資料
  */
 
-import { GAME_CONFIG } from '../utils/Constants';
+import { GAME_CONFIG, DEFAULT_SETTINGS } from '../utils/Constants';
 
 export default class SaveManager {
   constructor() {
@@ -15,11 +15,7 @@ export default class SaveManager {
       unlockedLevels: [1], // 第一關預設解鎖
       totalEnemiesDestroyed: 0,
       gamesPlayed: 0,
-      settings: {
-        musicVolume: 0.5,
-        sfxVolume: 0.7,
-        difficulty: 'normal'
-      },
+      settings: { ...DEFAULT_SETTINGS },
       statistics: {
         totalPlayTime: 0,
         levelsCompleted: 0,

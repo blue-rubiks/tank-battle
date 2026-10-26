@@ -3,7 +3,7 @@
  */
 
 import Tank from './Tank';
-import { ENEMY_TYPES, EVENTS } from '../utils/Constants';
+import { ENEMY_TYPES, EVENTS, DIFFICULTY } from '../utils/Constants';
 
 export default class EnemyTank extends Tank {
   /**
@@ -32,8 +32,10 @@ export default class EnemyTank extends Tank {
 
     this.maxHealth = this.config.health;
     this.health = this.config.health;
-    this.speed = this.config.speed;
-    this.fireRate = this.config.fireRate;
+    // 難度（設定畫面）調整移動速度與射擊間隔；未設定或未知值視為普通
+    const difficulty = DIFFICULTY[scene.difficulty] || DIFFICULTY.normal;
+    this.speed = this.config.speed * difficulty.enemySpeed;
+    this.fireRate = this.config.fireRate * difficulty.enemyFireInterval;
     this.bulletSpeed = this.config.bulletSpeed;
     this.score = this.config.score;
 
@@ -124,7 +126,7 @@ export default class EnemyTank extends Tank {
 
     // 播放敵人摧毀音效
     if (this.scene.audioManager && this.scene.audioManager.playSFX) {
-      this.scene.audioManager.playSFX('enemydestroy', 0.5);
+      this.scene.audioManager.playSFX('enemydestroy', 0.7);
     }
 
     // 有機率掉落道具
