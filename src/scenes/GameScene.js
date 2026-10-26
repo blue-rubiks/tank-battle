@@ -31,11 +31,15 @@ import ObjectPool from '../utils/ObjectPool';
 import AudioManager from '../managers/AudioManager';
 import SaveManager from '../managers/SaveManager';
 
+// 方向鍵讀取順序：timeDown 相同時依此順序取第一個
+const PLAYER_INPUT_ORDER = ['up', 'down', 'left', 'right'];
+
 export default class GameScene extends Phaser.Scene {
   // ==========================================
   // 生命週期方法
   // ==========================================
 
+  // Stryker disable next-line BlockStatement: 清空建構子會因未呼叫 super() 在建立實例時就拋錯（無效的變異體）
   constructor() {
     super({ key: SCENES.GAME });
   }
@@ -1538,17 +1542,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   handlePlayerInput() {
-    let inputDirection = null;
-
-    if (this.cursors.up.isDown) {
-      inputDirection = 'up';
-    } else if (this.cursors.down.isDown) {
-      inputDirection = 'down';
-    } else if (this.cursors.left.isDown) {
-      inputDirection = 'left';
-    } else if (this.cursors.right.isDown) {
-      inputDirection = 'right';
-    }
+    const inputDirection = this.resolveInputDirection();
 
     if (inputDirection) {
       this.applyPlayerGridLock(inputDirection);
@@ -1559,6 +1553,30 @@ export default class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.fireKey) && this.player.shoot()) {
       this.recordStat('bulletsShot');
     }
+
+    return inputDirection !== null;
+  }
+
+  /**
+   * 解析方向鍵輸入：多鍵同時按住時，最後按下的鍵優先
+   *
+   * 舊版採固定優先序（上 > 下 > 左 > 右），「按著上再壓右」要等放開上鍵才會轉，
+   * 反向操作卻會立刻轉，手感不對稱而卡頓。改以 Key.timeDown 判定最後按下者；
+   * timeDown 相同（或不存在）時維持上下左右的順序，行為可預期。
+   *
+   * @returns {string|null} 方向，沒有按鍵時為 null
+   */
+  resolveInputDirection() {
+    let latest = null;
+
+    for (const direction of PLAYER_INPUT_ORDER) {
+      const key = this.cursors[direction];
+      if (key.isDown && (!latest || key.timeDown > latest.timeDown)) {
+        latest = { direction, timeDown: key.timeDown };
+      }
+    }
+
+    return latest ? latest.direction : null;
   }
 
   /**

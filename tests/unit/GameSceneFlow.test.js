@@ -1553,6 +1553,70 @@ describe('GameScene.handlePlayerInput', () => {
     expect(lock).toHaveBeenCalledWith(expected);
   });
 
+  test.each([
+    ['up', 'right'],
+    ['up', 'left'],
+    ['down', 'right'],
+    ['left', 'up'],
+    ['right', 'down']
+  ])('按著 %s 再壓 %s 時，最後按下的鍵優先', (first, second) => {
+    const lock = jest.spyOn(scene, 'applyPlayerGridLock').mockImplementation(() => {});
+    scene.cursors[first].isDown = true;
+    scene.cursors[first].timeDown = 1000;
+    scene.cursors[second].isDown = true;
+    scene.cursors[second].timeDown = 1500;
+
+    scene.handlePlayerInput();
+
+    expect(lock).toHaveBeenCalledWith(second);
+  });
+
+  test('放開最後按下的鍵後，回到仍按住的鍵', () => {
+    const lock = jest.spyOn(scene, 'applyPlayerGridLock').mockImplementation(() => {});
+    scene.cursors.up.isDown = true;
+    scene.cursors.up.timeDown = 1000;
+    scene.cursors.right.isDown = true;
+    scene.cursors.right.timeDown = 1500;
+    scene.handlePlayerInput();
+    expect(lock).toHaveBeenLastCalledWith('right');
+
+    scene.cursors.right.isDown = false;
+    scene.handlePlayerInput();
+    expect(lock).toHaveBeenLastCalledWith('up');
+  });
+
+  test('較早按下但仍按住的鍵，不會被已放開的新鍵影響', () => {
+    const lock = jest.spyOn(scene, 'applyPlayerGridLock').mockImplementation(() => {});
+    scene.cursors.left.isDown = true;
+    scene.cursors.left.timeDown = 1000;
+    scene.cursors.down.isDown = false;
+    scene.cursors.down.timeDown = 2000;
+
+    scene.handlePlayerInput();
+
+    expect(lock).toHaveBeenCalledWith('left');
+  });
+
+  test('resolveInputDirection 沒有按鍵時回傳 null', () => {
+    expect(scene.resolveInputDirection()).toBeNull();
+  });
+
+  test('沒有按方向鍵時停止', () => {
+    const stop = jest.spyOn(scene.player, 'stop');
+    const lock = jest.spyOn(scene, 'applyPlayerGridLock');
+
+    expect(scene.handlePlayerInput()).toBe(false);
+
+    expect(stop).toHaveBeenCalled();
+    expect(lock).not.toHaveBeenCalled();
+  });
+
+  test('按住方向鍵時回傳 true（移動中）', () => {
+    jest.spyOn(scene, 'applyPlayerGridLock').mockImplementation(() => {});
+    scene.cursors.left.isDown = true;
+
+    expect(scene.handlePlayerInput()).toBe(true);
+  });
 
   test('剛按下空白鍵時射擊，並記錄射擊數', () => {
     const shoot = jest.spyOn(scene.player, 'shoot');
