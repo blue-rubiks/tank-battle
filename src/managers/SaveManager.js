@@ -11,6 +11,7 @@ export default class SaveManager {
     this.defaultData = {
       highScore: 0,
       currentLevel: 1,
+      lastClearedLevel: 0, // 最後通關的關卡（0 = 尚未通關）
       unlockedLevels: [1], // 第一關預設解鎖
       totalEnemiesDestroyed: 0,
       gamesPlayed: 0,
@@ -172,6 +173,8 @@ export default class SaveManager {
       data.highScore = score;
     }
 
+    data.lastClearedLevel = level;
+
     // 解鎖下一關（如果有的話，最多到最後一關）
     const nextLevel = level + 1;
     if (nextLevel <= GAME_CONFIG.TOTAL_LEVELS) {
@@ -191,7 +194,7 @@ export default class SaveManager {
 
   /**
    * 更新統計資料
-   * @param {Object} stats - 統計資料 {enemiesDestroyed, bulletsShot, powerUpsCollected}
+   * @param {Object} stats - 統計資料 {enemiesDestroyed, bulletsShot, powerUpsCollected, playTime（秒）}
    */
   updateStatistics(stats) {
     const data = this.load();
@@ -206,6 +209,10 @@ export default class SaveManager {
 
     if (stats.powerUpsCollected !== undefined) {
       data.statistics.powerUpsCollected += stats.powerUpsCollected;
+    }
+
+    if (stats.playTime !== undefined) {
+      data.statistics.totalPlayTime += stats.playTime;
     }
 
     this.save(data);
@@ -252,6 +259,7 @@ export default class SaveManager {
       levelsCompleted: data.statistics.levelsCompleted,
       bulletsShot: data.statistics.bulletsShot,
       powerUpsCollected: data.statistics.powerUpsCollected,
+      totalPlayTime: data.statistics.totalPlayTime,
       unlockedLevels: data.unlockedLevels.length
     };
   }
@@ -277,7 +285,11 @@ export default class SaveManager {
     return {
       highScore: data.highScore !== undefined ? data.highScore : this.defaultData.highScore,
       currentLevel: data.currentLevel || this.defaultData.currentLevel,
-      unlockedLevels: data.unlockedLevels || this.defaultData.unlockedLevels,
+      // 舊存檔沒有此欄位：以「目前關卡的前一關」推算（最後一關通關後無從得知，會少算一關）
+      lastClearedLevel: data.lastClearedLevel !== undefined
+        ? data.lastClearedLevel
+        : (data.currentLevel || this.defaultData.currentLevel) - 1,
+      unlockedLevels: data.unlockedLevels || [...this.defaultData.unlockedLevels],
       totalEnemiesDestroyed: data.totalEnemiesDestroyed || this.defaultData.totalEnemiesDestroyed,
       gamesPlayed: data.gamesPlayed || this.defaultData.gamesPlayed,
       settings: {

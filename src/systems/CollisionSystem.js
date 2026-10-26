@@ -312,19 +312,23 @@ export default class CollisionSystem {
   onPlayerPowerUpCollision(player, powerUp) {
     if (!player.active || !powerUp.active) return;
 
+    // 套用道具效果（必須先於提示：星星訊息要顯示升級後的等級）
+    if (player.applyPowerUp) {
+      player.applyPowerUp(powerUp.powerUpType);
+    }
+
+    if (this.scene.recordStat) {
+      this.scene.recordStat('powerUpsCollected');
+    }
+
     // 顯示道具獲取提示
     if (this.scene.showPowerUpMessage) {
       this.scene.showPowerUpMessage(powerUp.powerUpType);
     }
 
-    // 套用道具效果
-    if (player.applyPowerUp) {
-      player.applyPowerUp(powerUp.powerUpType);
-    }
-
     // 播放道具收集音效
     if (this.scene.audioManager && this.scene.audioManager.playSFX) {
-      this.scene.audioManager.playSFX('powerup', 0.5);
+      this.scene.audioManager.playSFX('powerup', 0.7);
     }
 
     // 建立收集特效

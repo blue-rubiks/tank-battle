@@ -88,10 +88,8 @@ export default class PauseScene extends Phaser.Scene {
   captureStats(gameScene) {
     const data = (gameScene && gameScene.gameState) || {};
     const total = (gameScene && gameScene.totalEnemyCount) || 0;
-    const elapsed =
-      gameScene && gameScene.gameStartTime != null && gameScene.time
-        ? gameScene.time.now - gameScene.gameStartTime
-        : 0;
+    // 遊玩時間不含暫停（GameScene 只在 update 累加）
+    const elapsed = (gameScene && gameScene.playTime) || 0;
     return {
       level: data.level || 1,
       score: data.score || 0,

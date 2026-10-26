@@ -22,12 +22,16 @@ export default class GameOverScene extends Phaser.Scene {
     this.finalScore = data.score || 0;
     this.level = data.level || 1;
     this.isNewHighScore = data.isNewHighScore || false;
+
+    // Phaser 重新進入場景時沿用同一個實例：防重入旗標必須重設，否則第二次結束畫面無法離開
+    this._navigating = false;
   }
 
   create() {
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
 
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     // ===== 遮罩（深紅暈染）=====
     this.add.rectangle(0, 0, width, height, 0x000000, 0.78).setOrigin(0);
     this.add.rectangle(0, 0, width, height, 0x4a0000, 0.18).setOrigin(0);

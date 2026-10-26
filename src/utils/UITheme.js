@@ -321,6 +321,18 @@ export function formatStage(level) {
 }
 
 /**
+ * 格式化累計遊玩時間（h:mm:ss）
+ * @param {number} seconds - 秒數
+ */
+export function formatPlayTime(seconds) {
+  const total = Math.floor(seconds || 0);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor(total / 60) % 60;
+  const s = total % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/**
  * 格式化遊戲時間（mm:ss）
  */
 export function formatElapsedTime(ms) {

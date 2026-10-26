@@ -45,10 +45,19 @@ export default class GameScene extends Phaser.Scene {
     // 保存從上一關傳來的玩家狀態
     this.savedLives = data.lives || null;
     this.savedStarLevel = data.starLevel || null;
+    // 沒有帶生命數進來（主選單、重新開始）= 新的一局；過關進下一關會帶生命數
+    this.isNewGame = !data.lives;
+
+    // 本關統計（關卡結束時寫入存檔）；遊玩時間只在 update 累加，暫停時不計
+    this.playTime = 0;
+    this.stageStats = { bulletsShot: 0, powerUpsCollected: 0 };
 
     // UI 顯示狀態
     this.uiVisible = true;
     this.uiElements = [];
+
+    // 是否已觸發過關 / 遊戲結束（只能觸發一次；Phaser 重新開始時沿用同一個實例，需在此重設）
+    this.isEnding = false;
   }
 
   create() {
@@ -101,7 +110,9 @@ export default class GameScene extends Phaser.Scene {
   initializeSystems() {
     // 存檔管理器
     this.saveManager = new SaveManager();
-    this.saveManager.recordGameStart();
+    if (this.isNewGame) {
+      this.saveManager.recordGameStart();
+    }
 
     // 音效管理器
     this.audioManager = new AudioManager(this);
@@ -337,9 +348,10 @@ export default class GameScene extends Phaser.Scene {
 
     this.player = new PlayerTank(this, worldX, worldY);
 
-    // 恢復從上一關傳來的玩家狀態
+    // 恢復從上一關傳來的玩家狀態（生命數同步到遊戲狀態，HUD 依此繪製）
     if (this.savedLives !== null) {
       this.player.lives = this.savedLives;
+      this.gameState.lives = this.savedLives;
     }
     if (this.savedStarLevel !== null) {
       // 恢復星星等級和對應的屬性
@@ -458,9 +470,6 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createUI() {
-    // 記錄遊戲開始時間
-    this.gameStartTime = this.time.now;
-
     // 載入最高分（顯示於頂列右側）
     this.highScore = this.saveManager ? this.saveManager.getHighScore() : 0;
 
@@ -572,6 +581,14 @@ export default class GameScene extends Phaser.Scene {
     this.livesGraphics = this.add.graphics();
     this.livesGraphics.setDepth(DEPTHS.UI).setScrollFactor(0);
     this.uiElements.push(this.livesGraphics);
+
+    // 生命超過 3 條時顯示於第一顆愛心右側（「♥ ×4」），寬度不超出 3 顆愛心的範圍
+    this.livesCountText = this.add.text(this.livesAnchorX + 27, midY, '', {
+      fontFamily: TEXT_STYLES.VALUE.fontFamily,
+      fontSize: '12px',
+      color: HEX.DANGER
+    }).setOrigin(0, 0.5).setDepth(DEPTHS.UI).setScrollFactor(0);
+    this.uiElements.push(this.livesCountText);
     this.renderLives(this.gameState.lives);
 
     // 愛心列實際結束於 anchor + 3*21 + 2*6 = anchor + 75
@@ -633,15 +650,16 @@ export default class GameScene extends Phaser.Scene {
     this.uiElements.push(left);
 
     // 中：擊殺數 / 時間
-    // 鍵盤提示串改 11px 後變寬約 ~376px，KILLS 起點需往右挪避免重疊
-    this.killsText = this.add.text(width / 2 + 20, midY, 'KILLS · 0', {
+    // 左側鍵盤提示右緣約 x=393、右側 AUTO-SAVE 左緣約 x=698；
+    // KILLS 兩位數時寬約 109px、TIME 寬約 131px，兩者需錯開，否則擊殺數 ≥ 10 會蓋住 TIME
+    this.killsText = this.add.text(width / 2, midY, 'KILLS · 0', {
       fontFamily: TEXT_STYLES.LABEL_SMALL.fontFamily,
       fontSize: '9px',
       color: HEX.INK_2
     }).setOrigin(0, 0.5).setLetterSpacing(2).setDepth(DEPTHS.UI).setScrollFactor(0);
     this.uiElements.push(this.killsText);
 
-    this.timerText = this.add.text(width / 2 + 120, midY, 'TIME · 00:00', {
+    this.timerText = this.add.text(width / 2 + 130, midY, 'TIME · 00:00', {
       fontFamily: TEXT_STYLES.LABEL_SMALL.fontFamily,
       fontSize: '9px',
       color: HEX.INK_2
@@ -669,12 +687,16 @@ export default class GameScene extends Phaser.Scene {
     const scale = 3;
     const heartW = 7 * scale;
     const gap = 6;
-    const live = Math.max(0, Math.min(max, lives || 0));
+    const count = lives || 0;
+    // 超過 3 條畫不下：改成 1 顆愛心加上「×N」，否則多出的命在 HUD 上看不到
+    const overflow = count > max;
+    const slots = overflow ? 1 : max;
+    this.livesCountText.setText(overflow ? `×${count}` : '');
 
-    for (let i = 0; i < max; i++) {
+    for (let i = 0; i < slots; i++) {
       const cx = this.livesAnchorX + heartW / 2 + i * (heartW + gap);
       const cy = this.livesAnchorY;
-      if (i < live) {
+      if (i < count) {
         this.livesGraphics.fillStyle(PALETTE.DANGER, 1);
         drawPixelHeart(this.livesGraphics, cx, cy, scale, true);
       } else {
@@ -1292,6 +1314,9 @@ export default class GameScene extends Phaser.Scene {
   // ==========================================
 
   levelComplete() {
+    if (this.isEnding) return;
+    this.isEnding = true;
+
     this.scene.start(SCENES.LEVEL_COMPLETE, {
       score: this.player ? this.player.score : this.gameState.score,
       level: this.currentLevel,
@@ -1301,15 +1326,15 @@ export default class GameScene extends Phaser.Scene {
   }
 
   gameOver() {
+    // 玩家陣亡時事件監聽與 PlayerTank 都會呼叫；重複執行時
+    // 第二次的 isNewHighScore 必為 false，會覆蓋掉新紀錄
+    if (this.isEnding) return;
+    this.isEnding = true;
+
     const finalScore = this.player ? this.player.score : this.gameState.score;
 
     // 更新最高分
     const isNewHighScore = this.saveManager.updateHighScore(finalScore);
-
-    // 更新統計
-    this.saveManager.updateStatistics({
-      enemiesDestroyed: this.gameState.enemiesKilled || 0
-    });
 
     this.scene.start(SCENES.GAME_OVER, {
       score: finalScore,
@@ -1471,11 +1496,13 @@ export default class GameScene extends Phaser.Scene {
       this.aiBlackboard.update();
     }
 
+    // 暫停時場景不會 update，因此遊玩時間不含暫停
+    this.playTime += delta;
+
     // 更新底部時間顯示（每 ~250ms 更新一次以節省繪製）
-    if (this.timerText && this.gameStartTime != null) {
+    if (this.timerText) {
       if (!this._lastTimerTick || time - this._lastTimerTick > 250) {
-        const elapsed = time - this.gameStartTime;
-        const totalSec = Math.max(0, Math.floor(elapsed / 1000));
+        const totalSec = Math.floor(this.playTime / 1000);
         const m = String(Math.floor(totalSec / 60)).padStart(2, '0');
         const s = String(totalSec % 60).padStart(2, '0');
         this.timerText.setText(`TIME · ${m}:${s}`);
@@ -1529,8 +1556,8 @@ export default class GameScene extends Phaser.Scene {
       this.player.stop();
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.fireKey)) {
-      this.player.shoot();
+    if (Phaser.Input.Keyboard.JustDown(this.fireKey) && this.player.shoot()) {
+      this.recordStat('bulletsShot');
     }
   }
 
@@ -1641,7 +1668,32 @@ export default class GameScene extends Phaser.Scene {
   // 場景清理
   // ==========================================
 
+  /**
+   * 累加本關統計（射擊數、拾取道具數）
+   * @param {string} key - stageStats 的欄位
+   */
+  recordStat(key) {
+    this.stageStats[key]++;
+  }
+
+  /**
+   * 把本關統計寫入存檔
+   * 過關、遊戲結束、從暫停選單重新開始或回主選單都會經過 shutdown，每關只寫一次
+   */
+  saveStageStatistics() {
+    this.saveManager.updateStatistics({
+      enemiesDestroyed: this.gameState.enemiesKilled,
+      bulletsShot: this.stageStats.bulletsShot,
+      powerUpsCollected: this.stageStats.powerUpsCollected,
+      playTime: Math.round(this.playTime / 1000)
+    });
+  }
+
   shutdown() {
+    if (this.saveManager) {
+      this.saveStageStatistics();
+    }
+
     // 清理事件監聽
     this.events.off(EVENTS.PLAYER_DESTROYED);
     this.events.off(EVENTS.ENEMY_DESTROYED);

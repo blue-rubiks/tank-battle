@@ -3,7 +3,7 @@
  */
 
 import Phaser from 'phaser';
-import { SCENES } from '../utils/Constants';
+import { SCENES, GAME_CONFIG } from '../utils/Constants';
 import SaveManager from '../managers/SaveManager';
 import {
   PALETTE,
@@ -25,18 +25,18 @@ export default class LevelCompleteScene extends Phaser.Scene {
     this.nextLevel = this.currentLevel + 1;
     this.lives = data.lives !== undefined ? data.lives : 3;
     this.starLevel = data.starLevel || 0;
+
+    // Phaser 重新進入場景時沿用同一個實例：防重入旗標必須重設，否則第二次過關會卡在結算畫面
+    this._navigating = false;
   }
 
   create() {
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
 
-    this.saveManager = new SaveManager();
-    this.saveManager.completeLevel(this.currentLevel, this.score);
+    const isNewHighScore = this.recordCompletion();
 
-    const highScore = this.saveManager.getHighScore();
-    const isNewHighScore = this.score === highScore && this.score > 0;
-
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     // ===== 遮罩 =====
     this.add.rectangle(0, 0, width, height, 0x000000, 0.78).setOrigin(0);
 
@@ -97,8 +97,9 @@ export default class LevelCompleteScene extends Phaser.Scene {
     this.drawBreakdown(mx + 36, my + 210, modalW - 72, isNewHighScore);
 
     // ===== 按鈕 =====
-    const btnY = my + modalH - 120;
-    const isLast = this.nextLevel > 5;
+    // 第二顆按鈕底緣需與下方倒數提示（my + modalH - 18）留出間距
+    const btnY = my + modalH - 132;
+    const isLast = this.isLastStage();
 
     if (isLast) {
       this.createButton(mx + 36, btnY, modalW - 72, '⌂  返 回 主 選 單', true, () => this.backToMenu());
@@ -146,15 +147,34 @@ export default class LevelCompleteScene extends Phaser.Scene {
   }
 
   /**
+   * 寫入過關紀錄並判斷是否刷新最高分
+   * 必須在寫入前取得舊紀錄比較：寫入後再比「分數 === 最高分」，平手也會誤判為新紀錄
+   * @returns {boolean} 是否為新紀錄
+   */
+  recordCompletion() {
+    this.saveManager = new SaveManager();
+    const previousHighScore = this.saveManager.getHighScore();
+    this.saveManager.completeLevel(this.currentLevel, this.score);
+    return this.score > previousHighScore;
+  }
+
+  /**
+   * 是否為最後一關（全部通關）
+   */
+  isLastStage() {
+    return this.nextLevel > GAME_CONFIG.TOTAL_LEVELS;
+  }
+
+  /**
    * 根據存活生命數計算星級（1-3 顆）
    */
   computeStars() {
     if (this.lives >= 3) return 3;
     if (this.lives >= 2) return 2;
-    if (this.lives >= 1) return 1;
     return 1; // 通關至少給 1 顆
   }
 
+  // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
   drawStars(cx, cy, count) {
     const total = 3;
     const gap = 16;
@@ -192,13 +212,15 @@ export default class LevelCompleteScene extends Phaser.Scene {
     g.lineStyle(1, PALETTE.GOLD_DEEP, 0.7);
     this.drawDashedLine(g, x, y, x + w, y, 4, 4);
 
+    // Stryker restore all
     const rows = [
-      { k: 'STAGE', v: `${formatStage(this.currentLevel)} / 35`, color: HEX.GOLD_2 },
+      { k: 'STAGE', v: `${formatStage(this.currentLevel)} / ${formatStage(GAME_CONFIG.TOTAL_LEVELS)}`, color: HEX.GOLD_2 },
       { k: 'CURRENT SCORE', v: formatScore(this.score), color: HEX.GOLD_2 },
       { k: 'LIVES REMAINING', v: `${this.lives}`, color: HEX.PHOSPHOR },
       { k: 'STAR LEVEL', v: this.starLevel > 0 ? `Lv.${this.starLevel}` : '—', color: HEX.GOLD_2 }
     ];
 
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     const rowH = 28;
     rows.forEach((row, i) => {
       const ry = y + 14 + i * rowH;

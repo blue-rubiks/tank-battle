@@ -11,7 +11,8 @@ import {
   TEXT_STYLES,
   drawGoldCorners,
   formatScore,
-  formatStage
+  formatStage,
+  formatPlayTime
 } from '../utils/UITheme';
 
 export default class MenuScene extends Phaser.Scene {
@@ -27,7 +28,10 @@ export default class MenuScene extends Phaser.Scene {
     const saveData = this.saveManager.load();
     const highScore = saveData.highScore || 0;
     const currentLevel = saveData.currentLevel || 1;
+    const lastClearedLevel = saveData.lastClearedLevel;
+    const stats = this.saveManager.getStatistics();
 
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     // 純黑底 + 細微掃描線
     this.add.rectangle(0, 0, width, height, PALETTE.BG_0).setOrigin(0);
     this.drawScanlines(width, height);
@@ -72,7 +76,10 @@ export default class MenuScene extends Phaser.Scene {
     }).setOrigin(0.5).setLetterSpacing(14);
 
     // ===== 三欄統計面板 =====
-    this.drawStatsBlock(width / 2, 290, highScore, currentLevel);
+    this.drawStatsBlock(width / 2, 290, highScore, lastClearedLevel);
+
+    // ===== 遊戲紀錄（累計統計） =====
+    this.drawRecordRow(width / 2, 374, stats);
 
     // ===== 主開始按鈕 =====
     const buttonY = 480;
@@ -119,7 +126,8 @@ export default class MenuScene extends Phaser.Scene {
   /**
    * 三欄統計：HIGH SCORE / LAST RUN / RANK
    */
-  drawStatsBlock(cx, cy, highScore, currentLevel) {
+  drawStatsBlock(cx, cy, highScore, lastClearedLevel) {
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     const width = 580;
     const height = 78;
     const x = cx - width / 2;
@@ -138,12 +146,14 @@ export default class MenuScene extends Phaser.Scene {
 
     // 欄位資料
     const cellW = width / 3;
+    // Stryker restore all
     const cells = [
       { k: 'HIGH SCORE', v: formatScore(highScore), color: HEX.GOLD_2 },
-      { k: 'LAST RUN', v: `STAGE ${formatStage(Math.max(1, currentLevel - 1))}`, color: HEX.INK_0 },
+      { k: 'LAST RUN', v: lastClearedLevel > 0 ? `STAGE ${formatStage(lastClearedLevel)}` : '—', color: HEX.INK_0 },
       { k: 'RANK', v: this.deriveRank(highScore), color: HEX.PHOSPHOR }
     ];
 
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     cells.forEach((cell, i) => {
       const cellX = x + cellW * i + cellW / 2;
       this.add.text(cellX, y + 18, cell.k, {
@@ -158,6 +168,48 @@ export default class MenuScene extends Phaser.Scene {
         color: cell.color
       }).setOrigin(0.5).setLetterSpacing(2);
     });
+  }
+
+  /**
+   * 遊戲紀錄列：GAMES / KILLS / SHOTS / ITEMS / PLAY TIME
+   */
+  drawRecordRow(cx, cy, stats) {
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
+    const width = 580;
+    const cellW = width / 5;
+    const x = cx - width / 2;
+    // Stryker restore all
+    const cells = this.getRecordCells(stats);
+
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
+    cells.forEach((cell, i) => {
+      const cellX = x + cellW * i + cellW / 2;
+      this.add.text(cellX, cy - 10, cell.k, {
+        fontFamily: TEXT_STYLES.LABEL_SMALL.fontFamily,
+        fontSize: '8px',
+        color: HEX.INK_2
+      }).setOrigin(0.5).setLetterSpacing(3);
+
+      this.add.text(cellX, cy + 10, cell.v, {
+        fontFamily: TEXT_STYLES.VALUE.fontFamily,
+        fontSize: '12px',
+        color: HEX.INK_1
+      }).setOrigin(0.5).setLetterSpacing(1);
+    });
+  }
+
+  // Stryker restore all
+  /**
+   * 遊戲紀錄的欄位內容（累計統計）
+   */
+  getRecordCells(stats) {
+    return [
+      { k: 'GAMES', v: formatScore(stats.gamesPlayed) },
+      { k: 'KILLS', v: formatScore(stats.totalEnemiesDestroyed) },
+      { k: 'SHOTS', v: formatScore(stats.bulletsShot) },
+      { k: 'ITEMS', v: formatScore(stats.powerUpsCollected) },
+      { k: 'PLAY TIME', v: formatPlayTime(stats.totalPlayTime) }
+    ];
   }
 
   deriveRank(highScore) {
