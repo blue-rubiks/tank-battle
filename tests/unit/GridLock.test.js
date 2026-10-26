@@ -166,6 +166,36 @@ describe('GameScene.applyPlayerGridLock - 接線整合', () => {
     expect(scene.player.moved).toBe('up');
   });
 
+  test('水平行進時以 x 判斷是否到路口、以 vx 判斷是否前進', () => {
+    const center = GridMovement.gridToPixel(5, 5);
+    const offset = TANK_CONFIG.GRID_TURN_TOLERANCE + 1;
+
+    // 往右前進中、x 尚未到路口 → 緩衝
+    scene.player = makePlayer(center.x + offset, center.y, 'right', 120, 0);
+    scene.applyPlayerGridLock('up');
+    expect(scene.player.moved).toBe('right');
+
+    // 已對齊路口 → 立即轉
+    scene.player = makePlayer(center.x, center.y + offset, 'right', 120, 0);
+    scene.applyPlayerGridLock('up');
+    expect(scene.player.moved).toBe('up');
+
+    // 撞牆停住（vx ≈ 0）→ 直接轉
+    scene.player = makePlayer(center.x + offset, center.y, 'right', 1, 0);
+    scene.applyPlayerGridLock('down');
+    expect(scene.player.moved).toBe('down');
+  });
+
+  test('速度剛好 1 視為沒有前進', () => {
+    const center = GridMovement.gridToPixel(5, 5);
+    const offset = TANK_CONFIG.GRID_TURN_TOLERANCE + 1;
+    scene.player = makePlayer(center.x, center.y + offset, 'up', 0, -1);
+
+    scene.applyPlayerGridLock('left');
+
+    expect(scene.player.moved).toBe('left');
+  });
+
   test('撞牆（速度趨近 0）時即使未對齊也允許轉向', () => {
     const center = GridMovement.gridToPixel(5, 5);
     // y 偏離路口超過容差，但已被牆擋住（vy≈0）→ 直接轉

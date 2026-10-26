@@ -1,178 +1,197 @@
 /**
- * Bullet 子彈系統單元測試
+ * Bullet 子彈系統單元測試（真實實作）
+ * 出界處理見 BulletBounds.test.js
  */
 
-describe('Bullet - 子彈系統', () => {
-  describe('子彈基本屬性', () => {
-    test('應該正確初始化子彈屬性', () => {
-      const bullet = {
-        speed: 200,
-        damage: 1,
-        direction: 'up',
-        owner: null,
-        isPlayerBullet: false,
-        active: false
-      };
+import Bullet from '../../src/entities/Bullet';
+import { BULLET_CONFIG, DEPTHS } from '../../src/utils/Constants';
 
-      expect(bullet.speed).toBeGreaterThan(0);
-      expect(bullet.damage).toBeGreaterThan(0);
-      expect(['up', 'down', 'left', 'right']).toContain(bullet.direction);
-      expect(bullet.active).toBe(false);
+const makeMockScene = () => ({
+  add: { existing: jest.fn() },
+  physics: {
+    world: {
+      bounds: {
+        contains: jest.fn(() => true)
+      }
+    }
+  },
+  createHitEffect: jest.fn(),
+  audioManager: { playSFX: jest.fn() }
+});
+
+describe('Bullet - 子彈系統', () => {
+  let scene;
+  let bullet;
+
+  beforeEach(() => {
+    scene = makeMockScene();
+    bullet = new Bullet(scene, 10, 20);
+  });
+
+  describe('建構 - 預設屬性', () => {
+    test('應該只加入顯示（physics body 由群組建立）', () => {
+      expect(scene.add.existing).toHaveBeenCalledWith(bullet);
+      expect(bullet.texture).toBe('bullet');
     });
 
-    test('應該能識別玩家子彈', () => {
-      const playerTank = { constructor: { name: 'PlayerTank' } };
-      const bullet = {
-        owner: playerTank,
-        isPlayerBullet: playerTank.constructor.name === 'PlayerTank'
-      };
+    test('應該正確初始化子彈屬性', () => {
+      expect(bullet.speed).toBe(BULLET_CONFIG.SPEED);
+      expect(bullet.damage).toBe(BULLET_CONFIG.DAMAGE);
+      expect(bullet.direction).toBe('up');
+      expect(bullet.owner).toBeNull();
+      expect(bullet.isPlayerBullet).toBe(false);
+      expect(bullet.depth).toBe(DEPTHS.ENTITY);
+    });
+
+    test('預設應該是不活躍且不可見（等待物件池取用）', () => {
+      expect(bullet.active).toBe(false);
+      expect(bullet.visible).toBe(false);
+    });
+  });
+
+  describe('fire - 發射', () => {
+    test('應該設定位置與屬性並啟用', () => {
+      const owner = { faction: 'enemy' };
+      bullet.fire(300, 400, 'left', 150, 2, owner);
+
+      expect(bullet.x).toBe(300);
+      expect(bullet.y).toBe(400);
+      expect(bullet.direction).toBe('left');
+      expect(bullet.speed).toBe(150);
+      expect(bullet.damage).toBe(2);
+      expect(bullet.owner).toBe(owner);
+      expect(bullet.active).toBe(true);
+      expect(bullet.visible).toBe(true);
+    });
+
+    test('應該能識別玩家子彈並染成黃色', () => {
+      bullet.fire(0, 0, 'up', 200, 1, { faction: 'player' });
 
       expect(bullet.isPlayerBullet).toBe(true);
+      expect(bullet.tintTopLeft).toBe(BULLET_CONFIG.PLAYER_COLOR);
     });
 
-    test('應該能識別敵人子彈', () => {
-      const enemyTank = { constructor: { name: 'EnemyTank' } };
-      const bullet = {
-        owner: enemyTank,
-        isPlayerBullet: enemyTank.constructor.name === 'PlayerTank'
-      };
+    test('應該能識別敵人子彈並染成紅色', () => {
+      bullet.fire(0, 0, 'up', 200, 1, { faction: 'enemy' });
+
+      expect(bullet.isPlayerBullet).toBe(false);
+      expect(bullet.tintTopLeft).toBe(BULLET_CONFIG.ENEMY_COLOR);
+    });
+
+    test('沒有發射者時應該視為敵人子彈', () => {
+      bullet.fire(0, 0, 'up', 200, 1, null);
 
       expect(bullet.isPlayerBullet).toBe(false);
     });
-  });
 
-  describe('子彈發射', () => {
-    test('發射時應該設定正確的速度向量', () => {
-      const DIRECTION_VECTORS = {
-        up: { x: 0, y: -1 },
-        down: { x: 0, y: 1 },
-        left: { x: -1, y: 0 },
-        right: { x: 1, y: 0 }
-      };
+    test('發射者沒有陣營時應該視為敵人子彈', () => {
+      bullet.fire(0, 0, 'up', 200, 1, {});
 
-      const direction = 'up';
-      const speed = 200;
-      const vector = DIRECTION_VECTORS[direction];
-      const velocity = {
-        x: vector.x * speed,
-        y: vector.y * speed
-      };
-
-      expect(velocity.x).toBe(0);
-      expect(velocity.y).toBe(-200);
+      expect(bullet.isPlayerBullet).toBe(false);
     });
 
-    test('發射時應該設定正確的角度', () => {
-      const DIRECTION_ANGLES = {
-        up: 0,
-        down: 180,
-        left: 270,
-        right: 90
-      };
+    test.each([
+      ['up', 0, 0, -200],
+      ['down', 180, 0, 200],
+      ['left', 270, -200, 0],
+      ['right', 90, 200, 0]
+    ])('往 %s 發射時角度與速度向量應該正確', (direction, angle, vx, vy) => {
+      bullet.fire(0, 0, direction, 200, 1, { faction: 'player' });
 
-      expect(DIRECTION_ANGLES.up).toBe(0);
-      expect(DIRECTION_ANGLES.down).toBe(180);
-      expect(DIRECTION_ANGLES.left).toBe(270);
-      expect(DIRECTION_ANGLES.right).toBe(90);
+      expect(bullet.angle).toBe(angle);
+      expect(bullet.body.velocity.x).toBe(vx);
+      expect(bullet.body.velocity.y).toBe(vy);
     });
 
-    test('玩家子彈應該是黃色', () => {
-      const BULLET_COLORS = {
-        PLAYER: 0xFFFF00,
-        ENEMY: 0xFF0000
-      };
+    test('應該設定碰撞箱大小', () => {
+      bullet.body.setSize = jest.fn();
+      bullet.fire(0, 0, 'up', 200, 1, null);
 
-      const playerBullet = {
-        isPlayerBullet: true,
-        color: BULLET_COLORS.PLAYER
-      };
-
-      expect(playerBullet.color).toBe(0xFFFF00);
+      expect(bullet.body.setSize).toHaveBeenCalledWith(BULLET_CONFIG.SIZE, BULLET_CONFIG.SIZE);
     });
 
-    test('敵人子彈應該是紅色', () => {
-      const BULLET_COLORS = {
-        PLAYER: 0xFFFF00,
-        ENEMY: 0xFF0000
-      };
+    test('無效方向時不應該設定速度', () => {
+      bullet.fire(0, 0, 'diagonal', 200, 1, null);
 
-      const enemyBullet = {
-        isPlayerBullet: false,
-        color: BULLET_COLORS.ENEMY
-      };
+      expect(bullet.body.velocity.x).toBe(0);
+      expect(bullet.body.velocity.y).toBe(0);
+    });
 
-      expect(enemyBullet.color).toBe(0xFF0000);
+    test('沒有 body 時應該發出警告而不拋錯', () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      bullet.body = null;
+
+      expect(() => bullet.fire(0, 0, 'up', 200, 1, null)).not.toThrow();
+      expect(warn).toHaveBeenCalledWith('Bullet has no body! Make sure it\'s added to bulletGroup first.');
+      expect(bullet.active).toBe(true);
+
+      warn.mockRestore();
+    });
+
+    test('應該播放射擊音效', () => {
+      bullet.fire(0, 0, 'up', 200, 1, null);
+
+      expect(scene.audioManager.playSFX).toHaveBeenCalledWith('shoot');
+    });
+
+    test('沒有音效管理器時也可以發射', () => {
+      scene.audioManager = null;
+
+      expect(() => bullet.fire(0, 0, 'up', 200, 1, null)).not.toThrow();
+    });
+
+    test('音效管理器沒有 playSFX 時也可以發射', () => {
+      scene.audioManager = {};
+
+      expect(() => bullet.fire(0, 0, 'up', 200, 1, null)).not.toThrow();
     });
   });
 
-  describe('子彈碰撞與銷毀', () => {
-    test('擊中目標時應該調用 onHit', () => {
-      const bullet = {
-        active: true,
-        onHit: jest.fn()
-      };
+  describe('preUpdate - 邊界檢查', () => {
+    test('應該以子彈目前座標檢查世界邊界', () => {
+      bullet.fire(123, 456, 'up', 200, 1, null);
+      bullet.preUpdate(0, 16);
 
+      expect(scene.physics.world.bounds.contains).toHaveBeenCalledWith(123, 456);
+    });
+
+    test('應該先呼叫父類別 preUpdate（維持動畫更新）', () => {
+      const parentPreUpdate = jest.spyOn(Object.getPrototypeOf(Bullet.prototype), 'preUpdate');
+      bullet.preUpdate(5, 16);
+
+      expect(parentPreUpdate).toHaveBeenCalledWith(5, 16);
+      parentPreUpdate.mockRestore();
+    });
+  });
+
+  describe('onHit - 擊中', () => {
+    test('應該在子彈位置建立擊中特效並停用', () => {
+      bullet.fire(50, 60, 'up', 200, 1, { faction: 'player' });
       bullet.onHit();
 
-      expect(bullet.onHit).toHaveBeenCalled();
+      expect(scene.createHitEffect).toHaveBeenCalledWith(50, 60);
+      expect(bullet.active).toBe(false);
+      expect(bullet.owner).toBeNull();
     });
 
-    test('超出邊界時應該被銷毀', () => {
-      const worldBounds = { x: 0, y: 0, width: 832, height: 832 };
-      const bulletPosition = { x: 900, y: 400 };
+    test('場景沒有擊中特效時也應該停用', () => {
+      delete scene.createHitEffect;
+      bullet.fire(50, 60, 'up', 200, 1, null);
 
-      const isOutOfBounds =
-        bulletPosition.x < worldBounds.x ||
-        bulletPosition.x > worldBounds.width ||
-        bulletPosition.y < worldBounds.y ||
-        bulletPosition.y > worldBounds.height;
-
-      expect(isOutOfBounds).toBe(true);
-    });
-
-    test('兩顆子彈相撞時應該相互抵銷', () => {
-      const bullet1 = { active: true, onHit: jest.fn() };
-      const bullet2 = { active: true, onHit: jest.fn() };
-
-      // 模擬子彈相撞
-      if (bullet1.active && bullet2.active && bullet1 !== bullet2) {
-        bullet1.onHit();
-        bullet2.onHit();
-      }
-
-      expect(bullet1.onHit).toHaveBeenCalled();
-      expect(bullet2.onHit).toHaveBeenCalled();
+      expect(() => bullet.onHit()).not.toThrow();
+      expect(bullet.active).toBe(false);
     });
   });
 
-  describe('子彈物件池', () => {
-    test('應該從池中取得子彈', () => {
-      const bulletPool = {
-        available: [{ id: 1 }, { id: 2 }],
-        get: function() {
-          return this.available.pop();
-        }
-      };
+  describe('deactivate - 回收', () => {
+    test('沒有 body 時也可以停用', () => {
+      bullet.fire(0, 0, 'up', 200, 1, { faction: 'enemy' });
+      bullet.body = null;
 
-      const bullet = bulletPool.get();
-      expect(bullet).toBeDefined();
-      expect(bulletPool.available.length).toBe(1);
-    });
-
-    test('應該將子彈歸還到池', () => {
-      const bulletPool = {
-        available: [],
-        release: function(bullet) {
-          bullet.active = false;
-          this.available.push(bullet);
-        }
-      };
-
-      const bullet = { id: 1, active: true };
-      bulletPool.release(bullet);
-
+      expect(() => bullet.deactivate()).not.toThrow();
       expect(bullet.active).toBe(false);
-      expect(bulletPool.available.length).toBe(1);
+      expect(bullet.visible).toBe(false);
+      expect(bullet.owner).toBeNull();
     });
   });
 });

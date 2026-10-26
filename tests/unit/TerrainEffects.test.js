@@ -1,166 +1,181 @@
 /**
- * 地形效果單元測試
- * 測試水域、冰地、森林的物理效果
+ * 地形效果單元測試（真實實作）
+ * 測試水域、冰地、森林的物理與視覺效果
+ * 多塊冰地 / 森林聚合判定見 IceTerrain.test.js
  */
 
+import Water from '../../src/entities/Water';
+import Ice from '../../src/entities/Ice';
+import Forest from '../../src/entities/Forest';
+import CollisionSystem from '../../src/systems/CollisionSystem';
+import { TANK_CONFIG, DEPTHS } from '../../src/utils/Constants';
+
+const makeMockScene = () => ({
+  add: { existing: jest.fn() },
+  tweens: { add: jest.fn() }
+});
+
+const makeTank = (x = 100, y = 100) => ({
+  x,
+  y,
+  alpha: 1,
+  body: { setDrag: jest.fn() },
+  setAlpha: jest.fn(function (a) { this.alpha = a; }),
+  getBounds() {
+    return { x: this.x - 16, y: this.y - 16, width: 32, height: 32 };
+  }
+});
+
 describe('地形效果', () => {
+  let scene;
+
+  beforeEach(() => {
+    scene = makeMockScene();
+  });
+
   describe('水域（Water）', () => {
-    test('水域應該阻擋坦克移動', () => {
-      const water = {
-        type: 'water',
-        isStatic: true,
-        blocksMovement: true
-      };
+    test('應該加入場景並在坦克下方渲染', () => {
+      const water = new Water(scene, 100, 100);
 
+      expect(scene.add.existing).toHaveBeenCalledWith(water);
       expect(water.type).toBe('water');
-      expect(water.blocksMovement).toBe(true);
+      expect(water.texture).toBe('water');
+      expect(water.depth).toBe(DEPTHS.MAP_LOWER);
     });
 
-    test('子彈應該能穿透水域', () => {
-      const water = { type: 'water' };
-      const bullet = { active: true };
+    test('應該有無限循環的波浪動畫', () => {
+      const water = new Water(scene, 100, 100);
 
-      // 子彈穿透邏輯（在 CollisionSystem 中實現）
-      const shouldDestroy = water.type !== 'water';
-
-      expect(shouldDestroy).toBe(false);
+      expect(scene.tweens.add).toHaveBeenCalledWith({
+        targets: water,
+        alpha: { from: 0.9, to: 1.0 },
+        duration: 2000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
     });
 
-    test('水域應該有波浪動畫效果', () => {
-      const water = {
-        type: 'water',
-        alpha: 0.95,
-        hasAnimation: true
-      };
+    test('子彈應該能穿透水域（不觸發爆炸與傷害）', () => {
+      const collision = new CollisionSystem({ createSpark: jest.fn() });
+      const water = new Water(scene, 100, 100);
+      water.takeDamage = jest.fn();
+      const bullet = { active: true, damage: 1, onHit: jest.fn() };
 
-      expect(water.hasAnimation).toBe(true);
-      expect(water.alpha).toBeGreaterThan(0.8);
-      expect(water.alpha).toBeLessThanOrEqual(1);
+      collision.onBulletWallCollision(bullet, water);
+
+      expect(bullet.onHit).not.toHaveBeenCalled();
+      expect(water.takeDamage).not.toHaveBeenCalled();
+      expect(collision.scene.createSpark).not.toHaveBeenCalled();
     });
   });
 
   describe('冰地（Ice）', () => {
-    test('坦克進入冰地時應該降低阻力', () => {
-      const { TANK_CONFIG } = require('../../src/utils/Constants');
-      const tank = {
-        drag: TANK_CONFIG.NORMAL_DRAG,
-        onIce: false
-      };
+    test('應該加入場景並在坦克下方渲染', () => {
+      const ice = new Ice(scene, 100, 100);
 
-      // 模擬進入冰地
-      const originalDrag = tank.drag;
-      tank.drag = TANK_CONFIG.ICE_DRAG;
-      tank.onIce = true;
+      expect(scene.add.existing).toHaveBeenCalledWith(ice);
+      expect(ice.type).toBe('ice');
+      expect(ice.texture).toBe('ice');
+      expect(ice.depth).toBe(DEPTHS.MAP_LOWER);
+    });
 
-      expect(tank.drag).toBeLessThan(originalDrag);
-      expect(tank.drag).toBe(TANK_CONFIG.ICE_DRAG);
+    test('坦克進入冰地時應該降低阻力並標記', () => {
+      const ice = new Ice(scene, 100, 100);
+      const tank = makeTank();
+
+      ice.onTankEnter(tank);
+
+      expect(tank.body.setDrag).toHaveBeenCalledWith(TANK_CONFIG.ICE_DRAG);
       expect(tank.onIce).toBe(true);
     });
 
-    test('坦克離開冰地時應該恢復原始阻力', () => {
-      const { TANK_CONFIG } = require('../../src/utils/Constants');
-      const tank = {
-        drag: TANK_CONFIG.ICE_DRAG,
-        onIce: true
-      };
+    test('坦克離開冰地時應該恢復一般阻力並清除標記', () => {
+      const ice = new Ice(scene, 100, 100);
+      const tank = makeTank();
+      tank.onIce = true;
 
-      // 模擬離開冰地（恢復為全域常數，不依賴 per-tile 紀錄）
-      tank.drag = TANK_CONFIG.NORMAL_DRAG;
-      tank.onIce = false;
+      ice.onTankExit(tank);
 
-      expect(tank.drag).toBe(TANK_CONFIG.NORMAL_DRAG);
+      expect(tank.body.setDrag).toHaveBeenCalledWith(TANK_CONFIG.NORMAL_DRAG);
       expect(tank.onIce).toBe(false);
     });
 
-    test('冰地阻力應該明顯低於一般地面', () => {
-      const { TANK_CONFIG } = require('../../src/utils/Constants');
+    test('沒有物理 body 的物件進出冰地應該被忽略', () => {
+      const ice = new Ice(scene, 100, 100);
+      const ghost = { body: null };
 
+      ice.onTankEnter(ghost);
+      expect(ghost.onIce).toBeUndefined();
+
+      ghost.onIce = true;
+      ice.onTankExit(ghost);
+      expect(ghost.onIce).toBe(true);
+    });
+
+    test('冰地阻力應該明顯低於一般地面', () => {
       expect(TANK_CONFIG.ICE_DRAG).toBeLessThan(TANK_CONFIG.NORMAL_DRAG / 2);
     });
   });
 
   describe('森林（Forest）', () => {
+    test('應該在坦克上方渲染且半透明', () => {
+      const forest = new Forest(scene, 100, 100);
+
+      expect(scene.add.existing).toHaveBeenCalledWith(forest);
+      expect(forest.type).toBe('forest');
+      expect(forest.texture).toBe('forest');
+      expect(forest.depth).toBe(DEPTHS.MAP_UPPER);
+      expect(forest.depth).toBeGreaterThan(DEPTHS.ENTITY);
+      expect(forest.alpha).toBe(0.85);
+    });
+
     test('坦克進入森林時應該被視覺遮蔽', () => {
-      const tank = {
-        alpha: 1.0,
-        inForest: false
-      };
+      const forest = new Forest(scene, 100, 100);
+      const tank = makeTank();
 
-      // 模擬進入森林
-      tank.alpha = 0.7;
-      tank.inForest = true;
+      forest.onTankEnter(tank);
 
-      expect(tank.alpha).toBeLessThan(1.0);
-      expect(tank.alpha).toBe(0.7);
+      expect(tank.setAlpha).toHaveBeenCalledWith(0.7);
       expect(tank.inForest).toBe(true);
     });
 
-    test('坦克離開森林時應該恢復原始透明度', () => {
-      const tank = {
-        alpha: 0.7,
-        inForest: true,
-        originalAlpha: 1.0
-      };
+    test('坦克離開森林時應該恢復完整透明度', () => {
+      const forest = new Forest(scene, 100, 100);
+      const tank = makeTank();
+      tank.inForest = true;
 
-      // 模擬離開森林
-      tank.alpha = tank.originalAlpha;
-      tank.inForest = false;
+      forest.onTankExit(tank);
 
-      expect(tank.alpha).toBe(1.0);
+      expect(tank.setAlpha).toHaveBeenCalledWith(1);
       expect(tank.inForest).toBe(false);
     });
 
-    test('森林應該在坦克上方渲染（深度層級）', () => {
-      const DEPTHS = {
-        MAP_LOWER: 1,
-        ENTITY: 2,
-        MAP_UPPER: 3
-      };
+    test('沒有 setAlpha 的物件也能標記進出', () => {
+      const forest = new Forest(scene, 100, 100);
+      const plain = {};
 
-      const forest = { depth: DEPTHS.MAP_UPPER };
-      const tank = { depth: DEPTHS.ENTITY };
+      forest.onTankEnter(plain);
+      expect(plain.inForest).toBe(true);
 
-      expect(forest.depth).toBeGreaterThan(tank.depth);
-    });
-
-    test('森林本身應該是半透明的', () => {
-      const forest = {
-        type: 'forest',
-        alpha: 0.85
-      };
-
-      expect(forest.alpha).toBeGreaterThan(0.7);
-      expect(forest.alpha).toBeLessThan(1.0);
+      forest.onTankExit(plain);
+      expect(plain.inForest).toBe(false);
     });
   });
 
   describe('地形重疊檢測', () => {
-    test('應該正確檢測坦克與地形的重疊', () => {
-      // 模擬矩形重疊檢測
-      const tankBounds = { x: 100, y: 100, width: 32, height: 32 };
-      const terrainBounds = { x: 110, y: 110, width: 32, height: 32 };
+    test.each([Ice, Forest])('%p 應該正確檢測坦克是否重疊', (Terrain) => {
+      const terrain = new Terrain(scene, 100, 100);
 
-      // 簡化的 AABB 碰撞檢測
-      const isOverlapping =
-        tankBounds.x < terrainBounds.x + terrainBounds.width &&
-        tankBounds.x + tankBounds.width > terrainBounds.x &&
-        tankBounds.y < terrainBounds.y + terrainBounds.height &&
-        tankBounds.y + tankBounds.height > terrainBounds.y;
-
-      expect(isOverlapping).toBe(true);
+      expect(terrain.isOverlapping(makeTank(110, 110))).toBe(true);
+      expect(terrain.isOverlapping(makeTank(100, 131))).toBe(true);
     });
 
-    test('不重疊時應該返回 false', () => {
-      const tankBounds = { x: 100, y: 100, width: 32, height: 32 };
-      const terrainBounds = { x: 200, y: 200, width: 32, height: 32 };
+    test.each([Ice, Forest])('%p 不重疊或只貼邊時應該返回 false', (Terrain) => {
+      const terrain = new Terrain(scene, 100, 100);
 
-      const isOverlapping =
-        tankBounds.x < terrainBounds.x + terrainBounds.width &&
-        tankBounds.x + tankBounds.width > terrainBounds.x &&
-        tankBounds.y < terrainBounds.y + terrainBounds.height &&
-        tankBounds.y + tankBounds.height > terrainBounds.y;
-
-      expect(isOverlapping).toBe(false);
+      expect(terrain.isOverlapping(makeTank(200, 200))).toBe(false);
+      expect(terrain.isOverlapping(makeTank(132, 100))).toBe(false);
     });
   });
 });

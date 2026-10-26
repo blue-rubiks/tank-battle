@@ -5,6 +5,9 @@
  */
 
 import GameScene from '../../src/scenes/GameScene';
+import BrickWall from '../../src/entities/BrickWall';
+import SteelWall from '../../src/entities/SteelWall';
+import Water from '../../src/entities/Water';
 import { TILE_TYPES, GAME_CONFIG } from '../../src/utils/Constants';
 
 describe('基地防護（鏟子道具）', () => {
@@ -119,5 +122,135 @@ describe('基地防護（鏟子道具）', () => {
 
     expect(scene.gameState.baseProtected).toBe(false);
     expect(scene.collisionSystem.addWall).not.toHaveBeenCalled();
+  });
+});
+
+describe('基地防護 - 牆位置與恢復細節', () => {
+  const TILE = GAME_CONFIG.TILE_SIZE;
+  const toWorld = (gx, gy) => ({ x: gx * TILE + TILE / 2, y: gy * TILE + TILE / 2 + GAME_CONFIG.PLAY_OFFSET_Y });
+  let timers;
+
+  const createScene = (existingWalls = []) => {
+    timers = [];
+    const s = new GameScene();
+    s.base = { isDestroyed: false };
+    s.gameState = { baseProtected: false };
+    s.levelData = {
+      basePosition: { x: 12, y: 24 },
+      map: Array(26).fill(null).map(() => Array(26).fill(TILE_TYPES.EMPTY))
+    };
+    s.add = { existing: jest.fn() };
+    s.tweens = { add: jest.fn() };
+    s.collisionSystem = {
+      addWall: jest.fn(),
+      wallGroup: { getChildren: () => existingWalls }
+    };
+    s.time = {
+      delayedCall: jest.fn((delay, callback) => {
+        const timer = { delay, callback, remove: jest.fn() };
+        timers.push(timer);
+        return timer;
+      })
+    };
+    return s;
+  };
+
+  const makeWall = (gx, gy, type, active = true) => ({
+    ...toWorld(gx, gy),
+    type,
+    active,
+    destroy: jest.fn(function () { this.active = false; })
+  });
+
+  test('鋼牆應該剛好圍住基地周圍 8 格（不含基地本身）', () => {
+    const scene = createScene();
+
+    scene.activateBaseProtection(15000);
+
+    const positions = scene.baseProtectionWalls.map(w => `${w.x},${w.y}`).sort();
+    const expected = [];
+    for (let gx = 11; gx <= 13; gx++) {
+      for (let gy = 23; gy <= 25; gy++) {
+        if (gx === 12 && gy === 24) continue;
+        const w = toWorld(gx, gy);
+        expected.push(`${w.x},${w.y}`);
+      }
+    }
+    expect(positions).toEqual(expected.sort());
+    expect(timers[0].delay).toBe(15000);
+  });
+
+  test('只取代同一格且仍存在的原牆', () => {
+    const target = makeWall(11, 23, 'brick');
+    const sameColumn = makeWall(11, 20, 'brick');
+    const destroyed = makeWall(13, 23, 'steel', false);
+    const scene = createScene([sameColumn, destroyed, target]);
+
+    scene.activateBaseProtection(15000);
+
+    expect(target.destroy).toHaveBeenCalled();
+    expect(sameColumn.destroy).not.toHaveBeenCalled();
+    expect(destroyed.destroy).not.toHaveBeenCalled();
+    expect(scene.savedBaseWalls).toEqual([{ ...toWorld(11, 23), type: 'brick' }]);
+  });
+
+  test('重複拾取時取消舊計時器但不觸發其回呼', () => {
+    const scene = createScene();
+    scene.activateBaseProtection(15000);
+
+    scene.activateBaseProtection(15000);
+
+    expect(timers[0].remove).toHaveBeenCalledWith(false);
+    expect(scene.gameState.baseProtected).toBe(true);
+  });
+
+  test('防護結束時移除仍存在的防護鋼牆，已被打掉的不重複移除', () => {
+    const scene = createScene();
+    scene.activateBaseProtection(15000);
+    const walls = scene.baseProtectionWalls;
+    const destroySpies = walls.map(w => jest.spyOn(w, 'destroy'));
+    walls[0].active = false;
+
+    timers[0].callback();
+
+    expect(destroySpies[0]).not.toHaveBeenCalled();
+    destroySpies.slice(1).forEach(spy => expect(spy).toHaveBeenCalled());
+    expect(scene.baseProtectionWalls).toEqual([]);
+  });
+
+  test.each([
+    ['brick', BrickWall, TILE_TYPES.BRICK],
+    ['steel', SteelWall, TILE_TYPES.STEEL],
+    ['water', Water, TILE_TYPES.WATER]
+  ])('原本是 %s 時恢復成同類型的牆並同步地圖', (type, WallClass, tile) => {
+    const scene = createScene([makeWall(11, 23, type)]);
+    scene.activateBaseProtection(15000);
+    scene.collisionSystem.addWall.mockClear();
+
+    timers[0].callback();
+
+    const restored = scene.collisionSystem.addWall.mock.calls.map(c => c[0]);
+    expect(restored).toHaveLength(1);
+    expect(restored[0]).toBeInstanceOf(WallClass);
+    expect([restored[0].x, restored[0].y]).toEqual(Object.values(toWorld(11, 23)));
+    expect(scene.levelData.map[23][11]).toBe(tile);
+    expect(scene.savedBaseWalls).toEqual([]);
+  });
+
+  test('無法辨識的原牆類型直接略過', () => {
+    const scene = createScene();
+    scene.activateBaseProtection(15000);
+    scene.savedBaseWalls.push({ ...toWorld(11, 23), type: 'lava' });
+    scene.collisionSystem.addWall.mockClear();
+
+    expect(() => timers[0].callback()).not.toThrow();
+    expect(scene.collisionSystem.addWall).not.toHaveBeenCalled();
+  });
+
+  test('從未啟動防護時結束防護也不應該拋錯', () => {
+    const scene = createScene();
+
+    expect(() => scene._endBaseProtection()).not.toThrow();
+    expect(scene.gameState.baseProtected).toBe(false);
   });
 });

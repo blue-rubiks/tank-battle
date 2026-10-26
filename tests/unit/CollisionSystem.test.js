@@ -72,6 +72,13 @@ describe('CollisionSystem', () => {
       expect(collisionSystem.bulletTankFilter(bullet, player2)).toBe(false);
     });
 
+    test('沒有陣營的坦克也不會被自己的子彈擊中', () => {
+      const neutral = makeTank(null);
+      const bullet = { active: true, owner: neutral, isPlayerBullet: false };
+
+      expect(collisionSystem.bulletTankFilter(bullet, neutral)).toBe(false);
+    });
+
     test('非活躍子彈不應該碰撞', () => {
       const enemy = makeTank('enemy');
       const bullet = makeBullet(makeTank('player'), false);

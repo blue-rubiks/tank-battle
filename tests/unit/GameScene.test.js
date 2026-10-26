@@ -1,68 +1,30 @@
 /**
  * GameScene 遊戲場景單元測試
- * 測試安全生成位置檢查邏輯
+ * 測試安全生成位置檢查與經典道具掉落邏輯（真實實作）
  */
 
-import { TILE_TYPES } from '../../src/utils/Constants';
+import GameScene from '../../src/scenes/GameScene';
+import { TILE_TYPES, GAME_CONFIG } from '../../src/utils/Constants';
 
-// 模擬 GameScene 的安全位置檢查方法（提取到外部供所有測試使用）
-class MockGameScene {
-  constructor(levelData) {
-    this.levelData = levelData;
-  }
+/**
+ * 以真實 GameScene 建立只含關卡資料的場景替身
+ */
+const makeScene = (levelData) => {
+  const scene = new GameScene();
+  scene.levelData = levelData;
+  return scene;
+};
 
-  /**
-   * 檢查位置是否安全（可以生成坦克）
-   * 這是從 GameScene.js 複製的邏輯
-   */
-  isPositionSafe(x, y, map) {
-    // 檢查是否超出地圖邊界
-    if (y < 0 || y >= map.length || x < 0 || x >= map[0].length) {
-      return false;
-    }
+beforeEach(() => {
+  // findSafeSpawnPosition 會輸出搜尋過程，測試中靜音
+  jest.spyOn(console, 'log').mockImplementation(() => {});
+  jest.spyOn(console, 'warn').mockImplementation(() => {});
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+});
 
-    const tileType = map[y][x];
-
-    // 安全的地形類型：空地(0)、冰地(4)、森林(5)
-    const safeTiles = [TILE_TYPES.EMPTY, TILE_TYPES.ICE, TILE_TYPES.FOREST];
-
-    return safeTiles.includes(tileType);
-  }
-
-  /**
-   * 尋找安全的生成位置
-   * 這是從 GameScene.js 複製的邏輯
-   */
-  findSafeSpawnPosition(x, y) {
-    const map = this.levelData.map;
-
-    // 檢查原始位置是否安全
-    if (this.isPositionSafe(x, y, map)) {
-      return { x, y };
-    }
-
-    // 如果不安全，在周圍尋找安全位置
-    // 搜尋範圍逐漸擴大
-    for (let radius = 1; radius <= 5; radius++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        for (let dy = -radius; dy <= radius; dy++) {
-          // 只檢查當前半徑邊緣的點（避免重複檢查）
-          if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
-            const newX = x + dx;
-            const newY = y + dy;
-
-            if (this.isPositionSafe(newX, newY, map)) {
-              return { x: newX, y: newY };
-            }
-          }
-        }
-      }
-    }
-
-    // 如果還是找不到，使用預設安全位置
-    return { x: 8, y: 24 };
-  }
-}
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 describe('GameScene - 安全生成位置檢查', () => {
 
@@ -73,7 +35,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 0, 0],
         [0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       expect(scene.isPositionSafe(1, 1, map)).toBe(true);
     });
 
@@ -83,7 +45,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 4, 0],
         [0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       expect(scene.isPositionSafe(1, 1, map)).toBe(true);
     });
 
@@ -93,7 +55,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 5, 0],
         [0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       expect(scene.isPositionSafe(1, 1, map)).toBe(true);
     });
 
@@ -103,7 +65,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 1, 0],
         [0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       expect(scene.isPositionSafe(1, 1, map)).toBe(false);
     });
 
@@ -113,7 +75,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 2, 0],
         [0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       expect(scene.isPositionSafe(1, 1, map)).toBe(false);
     });
 
@@ -123,7 +85,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 3, 0],
         [0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       expect(scene.isPositionSafe(1, 1, map)).toBe(false);
     });
 
@@ -133,7 +95,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 6, 0],
         [0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       expect(scene.isPositionSafe(1, 1, map)).toBe(false);
     });
 
@@ -143,7 +105,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 0, 0],
         [0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       expect(scene.isPositionSafe(-1, 1, map)).toBe(false);
       expect(scene.isPositionSafe(1, -1, map)).toBe(false);
     });
@@ -154,7 +116,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 0, 0],
         [0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       expect(scene.isPositionSafe(3, 1, map)).toBe(false);
       expect(scene.isPositionSafe(1, 3, map)).toBe(false);
     });
@@ -169,7 +131,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       const result = scene.findSafeSpawnPosition(2, 2);
       expect(result).toEqual({ x: 2, y: 2 });
     });
@@ -182,7 +144,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       const result = scene.findSafeSpawnPosition(2, 2);
 
       // 應該找到附近的安全位置（不是原始位置）
@@ -200,7 +162,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 1, 1, 1, 0],
         [0, 0, 0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       const result = scene.findSafeSpawnPosition(2, 2);
 
       // 應該找到外圍的安全位置
@@ -219,7 +181,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 1, 1, 1, 0],
         [0, 0, 0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       const result = scene.findSafeSpawnPosition(2, 2);
 
       // 應該找到距離為 1 的位置 (3, 2)
@@ -234,7 +196,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       const result = scene.findSafeSpawnPosition(2, 2);
       expect(result).toEqual({ x: 2, y: 2 });
     });
@@ -247,9 +209,30 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       const result = scene.findSafeSpawnPosition(2, 2);
       expect(result).toEqual({ x: 2, y: 2 });
+    });
+
+    test('應該輸出搜尋過程的提示', () => {
+      const map = [
+        [0, 0, 0],
+        [0, 1, 0],
+        [0, 0, 0]
+      ];
+      const scene = makeScene({ map });
+
+      scene.findSafeSpawnPosition(1, 1);
+
+      expect(console.warn).toHaveBeenCalledWith('⚠️ 玩家生成位置 (1, 1) 不安全，正在尋找替代位置...');
+    });
+
+    test('完全沒有安全位置時應該記錄錯誤', () => {
+      const scene = makeScene({ map: [[1]] });
+
+      scene.findSafeSpawnPosition(0, 0);
+
+      expect(console.error).toHaveBeenCalledWith('❌ 無法找到安全生成位置，使用預設位置 (8, 24)');
     });
 
     test('完全沒有安全位置時，應該返回預設位置 (8, 24)', () => {
@@ -259,7 +242,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [1, 1, 1],
         [1, 1, 1]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       const result = scene.findSafeSpawnPosition(1, 1);
 
       // 應該返回預設位置
@@ -280,7 +263,7 @@ describe('GameScene - 安全生成位置檢查', () => {
       map[23][14] = 1;
       map[23][15] = 1;
 
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       const result = scene.findSafeSpawnPosition(8, 23);
 
       // 應該找到附近的安全位置
@@ -302,7 +285,7 @@ describe('GameScene - 安全生成位置檢查', () => {
       map[23][14] = 2;
       map[23][15] = 1;
 
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       const result = scene.findSafeSpawnPosition(8, 23);
 
       // 應該找到附近的安全位置
@@ -318,7 +301,7 @@ describe('GameScene - 安全生成位置檢查', () => {
         [0, 0, 0],
         [0, 0, 0]
       ];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
 
       // 測試四個角落
       expect(scene.isPositionSafe(0, 0, map)).toBe(true);
@@ -329,19 +312,19 @@ describe('GameScene - 安全生成位置檢查', () => {
 
     test('1x1 地圖應該正確處理', () => {
       const map = [[0]];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       expect(scene.isPositionSafe(0, 0, map)).toBe(true);
     });
 
     test('空地圖應該不會崩潰', () => {
       const map = [];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       expect(scene.isPositionSafe(0, 0, map)).toBe(false);
     });
 
     test('地圖只有一行時應該正確處理', () => {
       const map = [[0, 1, 0, 4, 5]];
-      const scene = new MockGameScene({ map });
+      const scene = makeScene({ map });
       expect(scene.isPositionSafe(0, 0, map)).toBe(true);  // 空地
       expect(scene.isPositionSafe(1, 0, map)).toBe(false); // 磚牆
       expect(scene.isPositionSafe(3, 0, map)).toBe(true);  // 冰地
@@ -351,61 +334,24 @@ describe('GameScene - 安全生成位置檢查', () => {
 });
 
 describe('GameScene - 經典道具掉落機制', () => {
-  // 擴展 MockGameScene 以支持道具掉落測試
-  class MockGameSceneWithPowerUps extends MockGameScene {
-    constructor(levelData) {
-      super(levelData);
-      this.gameState = {
-        enemiesKilled: 0,
-        enemiesRemaining: 10
-      };
-      this.powerUpsSpawned = [];
-    }
-
-    spawnPowerUp(x, y, type) {
-      this.powerUpsSpawned.push({ x, y, type });
-    }
-
-    onEnemyDestroyed() {
-      this.gameState.enemiesKilled++;
-
-      // 經典模式：第 4、11、18 輛敵人掉落道具
-      const powerUpTriggers = [4, 11, 18];
-      if (powerUpTriggers.includes(this.gameState.enemiesKilled)) {
-        const pos = this.getRandomEmptyPosition();
-        if (pos) {
-          const tileSize = 32;
-          const worldX = pos.x * tileSize + tileSize / 2;
-          const worldY = pos.y * tileSize + tileSize / 2;
-          this.spawnPowerUp(worldX, worldY);
-        }
-      }
-    }
-
-    getRandomEmptyPosition() {
-      const map = this.levelData.map;
-      const emptyPositions = [];
-
-      for (let y = 2; y < map.length - 2; y++) {
-        for (let x = 2; x < map[0].length - 2; x++) {
-          if (this.isPositionSafe(x, y, map)) {
-            emptyPositions.push({ x, y });
-          }
-        }
-      }
-
-      if (emptyPositions.length > 0) {
-        return emptyPositions[0];
-      }
-
-      return { x: 13, y: 13 };
-    }
-  }
+  /**
+   * 建立可呼叫 onEnemyDestroyed 的場景替身（UI 與道具生成以 mock 取代）
+   */
+  const makePowerUpScene = (levelData) => {
+    const scene = makeScene(levelData);
+    scene.gameState = { enemiesKilled: 0, enemiesRemaining: 10 };
+    scene.enemyQueue = [];
+    scene.powerUpsSpawned = [];
+    scene.updateEnemies = jest.fn();
+    scene.levelComplete = jest.fn();
+    scene.spawnPowerUp = jest.fn((x, y, type) => scene.powerUpsSpawned.push({ x, y, type }));
+    return scene;
+  };
 
   describe('經典觸發點測試', () => {
     test('第 4 個敵人被擊毀時應該掉落道具', () => {
       const map = Array(26).fill(null).map(() => Array(26).fill(TILE_TYPES.EMPTY));
-      const scene = new MockGameSceneWithPowerUps({ map });
+      const scene = makePowerUpScene({ map });
 
       // 擊毀前 3 個敵人
       scene.onEnemyDestroyed();
@@ -421,7 +367,7 @@ describe('GameScene - 經典道具掉落機制', () => {
 
     test('第 11 個敵人被擊毀時應該掉落道具', () => {
       const map = Array(26).fill(null).map(() => Array(26).fill(TILE_TYPES.EMPTY));
-      const scene = new MockGameSceneWithPowerUps({ map });
+      const scene = makePowerUpScene({ map });
 
       // 擊毀 11 個敵人
       for (let i = 0; i < 11; i++) {
@@ -435,7 +381,7 @@ describe('GameScene - 經典道具掉落機制', () => {
 
     test('第 18 個敵人被擊毀時應該掉落道具', () => {
       const map = Array(26).fill(null).map(() => Array(26).fill(TILE_TYPES.EMPTY));
-      const scene = new MockGameSceneWithPowerUps({ map });
+      const scene = makePowerUpScene({ map });
 
       // 擊毀 18 個敵人
       for (let i = 0; i < 18; i++) {
@@ -449,7 +395,7 @@ describe('GameScene - 經典道具掉落機制', () => {
 
     test('擊毀 20 個敵人應該只掉落 3 個道具', () => {
       const map = Array(26).fill(null).map(() => Array(26).fill(TILE_TYPES.EMPTY));
-      const scene = new MockGameSceneWithPowerUps({ map });
+      const scene = makePowerUpScene({ map });
 
       // 擊毀 20 個敵人
       for (let i = 0; i < 20; i++) {
@@ -464,7 +410,7 @@ describe('GameScene - 經典道具掉落機制', () => {
   describe('隨機位置生成測試', () => {
     test('應該在空地生成道具', () => {
       const map = Array(26).fill(null).map(() => Array(26).fill(TILE_TYPES.EMPTY));
-      const scene = new MockGameSceneWithPowerUps({ map });
+      const scene = makePowerUpScene({ map });
 
       const pos = scene.getRandomEmptyPosition();
       expect(pos).toBeDefined();
@@ -480,7 +426,7 @@ describe('GameScene - 經典道具掉落機制', () => {
         }
       }
 
-      const scene = new MockGameSceneWithPowerUps({ map });
+      const scene = makePowerUpScene({ map });
       const pos = scene.getRandomEmptyPosition();
 
       expect(pos).toBeDefined();
@@ -491,7 +437,7 @@ describe('GameScene - 經典道具掉落機制', () => {
 
     test('應該可以在冰地生成道具', () => {
       const map = Array(26).fill(null).map(() => Array(26).fill(TILE_TYPES.ICE));
-      const scene = new MockGameSceneWithPowerUps({ map });
+      const scene = makePowerUpScene({ map });
 
       const pos = scene.getRandomEmptyPosition();
       expect(pos).toBeDefined();
@@ -500,7 +446,7 @@ describe('GameScene - 經典道具掉落機制', () => {
 
     test('應該可以在森林生成道具', () => {
       const map = Array(26).fill(null).map(() => Array(26).fill(TILE_TYPES.FOREST));
-      const scene = new MockGameSceneWithPowerUps({ map });
+      const scene = makePowerUpScene({ map });
 
       const pos = scene.getRandomEmptyPosition();
       expect(pos).toBeDefined();
@@ -509,7 +455,7 @@ describe('GameScene - 經典道具掉落機制', () => {
 
     test('地圖邊緣應該被排除（避免生成在邊界）', () => {
       const map = Array(26).fill(null).map(() => Array(26).fill(TILE_TYPES.EMPTY));
-      const scene = new MockGameSceneWithPowerUps({ map });
+      const scene = makePowerUpScene({ map });
 
       const pos = scene.getRandomEmptyPosition();
       expect(pos).toBeDefined();
@@ -524,7 +470,7 @@ describe('GameScene - 經典道具掉落機制', () => {
   describe('道具位置有效性測試', () => {
     test('道具應該生成在可達位置', () => {
       const map = Array(26).fill(null).map(() => Array(26).fill(TILE_TYPES.EMPTY));
-      const scene = new MockGameSceneWithPowerUps({ map });
+      const scene = makePowerUpScene({ map });
 
       // 擊毀第 4 個敵人觸發道具
       for (let i = 0; i < 4; i++) {
@@ -534,10 +480,15 @@ describe('GameScene - 經典道具掉落機制', () => {
       expect(scene.powerUpsSpawned.length).toBe(1);
       const powerUp = scene.powerUpsSpawned[0];
 
-      // 檢查道具位置的有效性（轉換回格子座標）
-      const tileSize = 32;
-      const tileX = Math.floor((powerUp.x - tileSize / 2) / tileSize);
-      const tileY = Math.floor((powerUp.y - tileSize / 2) / tileSize);
+      // 檢查道具位置的有效性（轉換回格子座標，扣除遊戲場 Y 偏移）
+      const tileSize = GAME_CONFIG.TILE_SIZE;
+      const tileX = Math.floor(powerUp.x / tileSize);
+      const tileY = Math.floor((powerUp.y - GAME_CONFIG.PLAY_OFFSET_Y) / tileSize);
+
+      expect(powerUp.x).toBe(tileX * tileSize + tileSize / 2);
+      expect(powerUp.y).toBe(tileY * tileSize + tileSize / 2 + GAME_CONFIG.PLAY_OFFSET_Y);
+      // 不指定類型，交給 spawnPowerUp 隨機
+      expect(powerUp.type).toBeUndefined();
 
       expect(scene.isPositionSafe(tileX, tileY, map)).toBe(true);
     });

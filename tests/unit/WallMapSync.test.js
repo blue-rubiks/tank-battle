@@ -94,6 +94,36 @@ describe('牆壁與地圖資料同步', () => {
       }).not.toThrow();
     });
 
+    test.each([
+      ['左', -1, 3],
+      ['右', 26, 3],
+      ['上', 3, -1],
+      ['下', 3, 26]
+    ])('只有一軸超出%s邊界時也不可寫入', (_label, gx, gy) => {
+      const worldX = gx * tileSize + tileSize / 2;
+      const worldY = gy * tileSize + tileSize / 2 + offsetY;
+
+      expect(() => scene.setMapTileAt(worldX, worldY, TILE_TYPES.EMPTY)).not.toThrow();
+
+      // 地圖列不可被延長或加入負索引
+      scene.levelData.map.forEach(row => {
+        expect(row).toHaveLength(26);
+        expect(Object.keys(row)).toHaveLength(26);
+        expect(row.every(tile => tile === TILE_TYPES.BRICK)).toBe(true);
+      });
+    });
+
+    test.each([
+      [0, 0],
+      [25, 0],
+      [0, 25],
+      [25, 25]
+    ])('四角格子 (%i, %i) 都可以寫入', (gx, gy) => {
+      scene.setMapTileAt(gx * tileSize + tileSize / 2, gy * tileSize + tileSize / 2 + offsetY, TILE_TYPES.ICE);
+
+      expect(scene.levelData.map[gy][gx]).toBe(TILE_TYPES.ICE);
+    });
+
     test('沒有地圖資料時不應該造成錯誤', () => {
       scene.levelData = null;
 

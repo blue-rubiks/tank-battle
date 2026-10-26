@@ -42,6 +42,13 @@ describe('敵人出生點佔位檢查', () => {
       expect(scene.isSpawnPointFree(world.x, world.y, TILE * 1.5)).toBe(false);
     });
 
+    test('已死亡的敵人不應該佔據出生點', () => {
+      const world = spawnToWorld(enemySpawns[0]);
+      scene.enemies = { getChildren: () => [{ active: false, x: world.x, y: world.y }] };
+
+      expect(scene.isSpawnPointFree(world.x, world.y, TILE * 1.5)).toBe(true);
+    });
+
     test('已死亡的坦克不應該佔據出生點', () => {
       const world = spawnToWorld(enemySpawns[0]);
       scene.player = { active: false, x: world.x, y: world.y };
@@ -71,6 +78,23 @@ describe('敵人出生點佔位檢查', () => {
       scene.enemies = { getChildren: () => occupiedTanks };
 
       expect(scene.findFreeSpawnPoint()).toBeNull();
+    });
+
+    test('出生點周圍 1.5 格內有坦克即視為佔據，剛好 1.5 格則可用', () => {
+      scene.levelData = { enemySpawns: [{ x: 5, y: 3 }] };
+      const world = spawnToWorld({ x: 5, y: 3 });
+
+      scene.player = { active: true, x: world.x + TILE * 1.5 - 1, y: world.y };
+      expect(scene.findFreeSpawnPoint()).toBeNull();
+
+      scene.player.x = world.x + TILE * 1.5;
+      expect(scene.findFreeSpawnPoint()).toEqual(world);
+    });
+
+    test('出生點應該換算成格子中心的世界座標（含 HUD 偏移）', () => {
+      scene.levelData = { enemySpawns: [{ x: 7, y: 9 }] };
+
+      expect(scene.findFreeSpawnPoint()).toEqual({ x: 7 * TILE + TILE / 2, y: 9 * TILE + TILE / 2 + OFFSET_Y });
     });
 
     test('沒有任何坦克時應該回傳其中一個出生點', () => {

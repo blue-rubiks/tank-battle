@@ -190,3 +190,270 @@ describe('GridMovement', () => {
     });
   });
 });
+
+describe('GridMovement.tileAt', () => {
+  // 3 欄 × 2 列（非正方形，確認欄 / 列沒有對調）
+  const map = [
+    [TILE_TYPES.EMPTY, TILE_TYPES.BRICK, TILE_TYPES.STEEL],
+    [TILE_TYPES.WATER, TILE_TYPES.ICE, TILE_TYPES.FOREST]
+  ];
+
+  test('應該回傳 map[gridY][gridX] 的地形', () => {
+    expect(GridMovement.tileAt(map, 0, 0)).toBe(TILE_TYPES.EMPTY);
+    expect(GridMovement.tileAt(map, 2, 0)).toBe(TILE_TYPES.STEEL);
+    expect(GridMovement.tileAt(map, 0, 1)).toBe(TILE_TYPES.WATER);
+    expect(GridMovement.tileAt(map, 2, 1)).toBe(TILE_TYPES.FOREST);
+  });
+
+  test.each([
+    ['上方', 1, -1],
+    ['下方', 1, 2],
+    ['左方', -1, 0],
+    ['右方', 3, 1]
+  ])('超出地圖%s時回傳 undefined（不拋錯）', (_, x, y) => {
+    expect(GridMovement.tileAt(map, x, y)).toBeUndefined();
+  });
+});
+
+describe('GridMovement 邊界與分支', () => {
+  const center = (gx, gy) => GridMovement.gridToPixel(gx, gy);
+  const makeMap = (fill = TILE_TYPES.EMPTY) =>
+    Array(26).fill(null).map(() => Array(26).fill(fill));
+
+  test('snapToGrid（舊 API）應該等同 snapXToGrid', () => {
+    expect(GridMovement.snapToGrid(60)).toBe(GridMovement.snapXToGrid(60));
+    expect(GridMovement.snapToGrid(65)).toBe(80);
+  });
+
+  test('checkAlignment 剛好等於門檻時視為已對齊', () => {
+    const c = center(5, 5);
+    const result = GridMovement.checkAlignment({ x: c.x + 4, y: c.y - 4 });
+
+    expect(result.alignedX).toBe(true);
+    expect(result.alignedY).toBe(true);
+    expect(GridMovement.checkAlignment({ x: c.x + 5, y: c.y - 5 }).alignedX).toBe(false);
+    expect(GridMovement.checkAlignment({ x: c.x + 5, y: c.y - 5 }).alignedY).toBe(false);
+  });
+
+  describe('isPositionWalkable', () => {
+    test('沒有地圖時視為可走', () => {
+      expect(GridMovement.isPositionWalkable(100, 100, null)).toBe(true);
+    });
+
+    test.each([
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1]
+    ])('只有 (%i, %i) 角落伸進斜對角的牆時也不可走', (dx, dy) => {
+      const map = makeMap();
+      map[5 + dy][5 + dx] = TILE_TYPES.BRICK;
+      const c = center(5, 5);
+
+      // 偏移 3px：該角落（±14）跨進斜對角格，其他角落仍在原本或相鄰格
+      expect(GridMovement.isPositionWalkable(c.x + dx * 3, c.y + dy * 3, map)).toBe(false);
+      expect(GridMovement.isPositionWalkable(c.x - dx * 3, c.y - dy * 3, map)).toBe(true);
+    });
+
+    test.each([
+      [TILE_TYPES.BRICK, false],
+      [TILE_TYPES.STEEL, false],
+      [TILE_TYPES.WATER, false],
+      [TILE_TYPES.ICE, true],
+      [TILE_TYPES.FOREST, true],
+      [TILE_TYPES.BASE, true]
+    ])('地形 %i 是否可走：%s', (tile, expected) => {
+      const map = makeMap();
+      map[5][5] = tile;
+      const c = center(5, 5);
+
+      expect(GridMovement.isPositionWalkable(c.x, c.y, map)).toBe(expected);
+    });
+
+    test('四個邊緣的格子都在地圖內', () => {
+      const map = makeMap();
+
+      expect(GridMovement.isPositionWalkable(center(0, 5).x, center(0, 5).y, map)).toBe(true);
+      expect(GridMovement.isPositionWalkable(center(5, 0).x, center(5, 0).y, map)).toBe(true);
+      expect(GridMovement.isPositionWalkable(center(25, 5).x, center(25, 5).y, map)).toBe(true);
+      expect(GridMovement.isPositionWalkable(center(5, 25).x, center(5, 25).y, map)).toBe(true);
+    });
+
+    test('任一角落超出地圖時不可走', () => {
+      const map = makeMap();
+
+      expect(GridMovement.isPositionWalkable(center(0, 5).x - 3, center(0, 5).y, map)).toBe(false);
+      expect(GridMovement.isPositionWalkable(center(5, 0).x, center(5, 0).y - 3, map)).toBe(false);
+      expect(GridMovement.isPositionWalkable(center(25, 5).x + 3, center(25, 5).y, map)).toBe(false);
+      expect(GridMovement.isPositionWalkable(center(5, 25).x, center(5, 25).y + 3, map)).toBe(false);
+    });
+  });
+
+  describe('calculateCornerSlide', () => {
+    test('沒有地圖時不滑動（即使偏離中心）', () => {
+      const c = center(5, 5);
+
+      expect(GridMovement.calculateCornerSlide({ x: c.x + 5, y: c.y }, 'up', null)).toBeNull();
+    });
+
+    test.each(['up', 'down'])('往 %s 移動時把 X 偏移往中心修正（每幀最多 3px）', (direction) => {
+      const map = makeMap();
+      const c = center(5, 5);
+
+      expect(GridMovement.calculateCornerSlide({ x: c.x + 5, y: c.y }, direction, map))
+        .toEqual({ axis: 'x', amount: -3, targetValue: c.x });
+      expect(GridMovement.calculateCornerSlide({ x: c.x - 5, y: c.y }, direction, map))
+        .toEqual({ axis: 'x', amount: 3, targetValue: c.x });
+      expect(GridMovement.calculateCornerSlide({ x: c.x + 2.5, y: c.y }, direction, map))
+        .toEqual({ axis: 'x', amount: -2.5, targetValue: c.x });
+    });
+
+    test.each(['left', 'right'])('往 %s 移動時把 Y 偏移往中心修正', (direction) => {
+      const map = makeMap();
+      const c = center(5, 5);
+
+      expect(GridMovement.calculateCornerSlide({ x: c.x, y: c.y + 5 }, direction, map))
+        .toEqual({ axis: 'y', amount: -3, targetValue: c.y });
+      expect(GridMovement.calculateCornerSlide({ x: c.x, y: c.y - 5 }, direction, map))
+        .toEqual({ axis: 'y', amount: 3, targetValue: c.y });
+    });
+
+    test('偏移在 2px 死區內（含）不修正', () => {
+      const map = makeMap();
+      const c = center(5, 5);
+
+      expect(GridMovement.calculateCornerSlide({ x: c.x + 2, y: c.y }, 'up', map)).toBeNull();
+      expect(GridMovement.calculateCornerSlide({ x: c.x, y: c.y - 2 }, 'left', map)).toBeNull();
+    });
+
+    test('只修正移動方向的垂直軸', () => {
+      const map = makeMap();
+      const c = center(5, 5);
+
+      expect(GridMovement.calculateCornerSlide({ x: c.x, y: c.y + 5 }, 'up', map)).toBeNull();
+      expect(GridMovement.calculateCornerSlide({ x: c.x + 5, y: c.y }, 'right', map)).toBeNull();
+      expect(GridMovement.calculateCornerSlide({ x: c.x + 5, y: c.y + 5 }, undefined, map)).toBeNull();
+    });
+
+    test('修正後的位置不可走時不滑動', () => {
+      const map = makeMap();
+      const c = center(5, 5);
+      map[5][5] = TILE_TYPES.STEEL;
+
+      expect(GridMovement.calculateCornerSlide({ x: c.x + 5, y: c.y }, 'up', map)).toBeNull();
+      expect(GridMovement.calculateCornerSlide({ x: c.x, y: c.y + 5 }, 'left', map)).toBeNull();
+    });
+  });
+
+  describe('resolveGridDirection 防呆', () => {
+    test('沒有輸入時即使未對齊也回傳 null', () => {
+      expect(GridMovement.resolveGridDirection('up', null, 99, true, 8)).toBeNull();
+      expect(GridMovement.resolveGridDirection('left', undefined, 99, true, 8)).toBeNull();
+    });
+
+    test('沒有目前方向時即使未對齊也直接採用輸入', () => {
+      expect(GridMovement.resolveGridDirection(undefined, 'up', 99, true, 8)).toBe('up');
+    });
+
+    test('預設容差為 8px', () => {
+      expect(GridMovement.resolveGridDirection('up', 'left', 8, true)).toBe('left');
+      expect(GridMovement.resolveGridDirection('up', 'left', 9, true)).toBe('up');
+      expect(GridMovement.resolveGridDirection('up', 'left', -8, true)).toBe('left');
+    });
+  });
+
+  test('lockToLane 預設每幀收斂 3px', () => {
+    const c = center(5, 5);
+
+    expect(GridMovement.lockToLane({ x: c.x + 10, y: c.y }, 'down')).toEqual({ axis: 'x', amount: -3 });
+    expect(GridMovement.lockToLane({ x: c.x, y: c.y - 2 }, 'right')).toEqual({ axis: 'y', amount: 2 });
+  });
+
+  test('canMoveInDirection 沒有地圖時視為可通行', () => {
+    expect(GridMovement.canMoveInDirection(center(5, 5), 'up', null)).toBe(true);
+    expect(GridMovement.getAvailableDirections(center(5, 5), null)).toEqual(['up', 'down', 'left', 'right']);
+  });
+
+  describe('forceSnapToGrid', () => {
+    test('偏移達半格（16px）時不強制對齊', () => {
+      const c = center(5, 5);
+      const tank = { x: c.x + 16, y: c.y };
+
+      expect(GridMovement.forceSnapToGrid(tank, makeMap())).toBe(false);
+      expect(tank.x).toBe(c.x + 16);
+    });
+
+    test('只有一個軸偏移過大也不對齊', () => {
+      const c = center(5, 5);
+
+      expect(GridMovement.forceSnapToGrid({ x: c.x, y: c.y + 16 }, makeMap())).toBe(false);
+      expect(GridMovement.forceSnapToGrid({ x: c.x + 15, y: c.y + 15 }, makeMap())).toBe(true);
+    });
+  });
+
+  describe('findNearestWalkablePosition - 螺旋搜尋', () => {
+    test('沒有地圖時回傳 null', () => {
+      expect(GridMovement.findNearestWalkablePosition(center(5, 5), null)).toBeNull();
+    });
+
+    test('目前格子可走時回傳目前格子中心', () => {
+      const c = center(5, 5);
+
+      expect(GridMovement.findNearestWalkablePosition({ x: c.x + 3, y: c.y - 3 }, makeMap())).toEqual(c);
+    });
+
+    test('應該由近而遠、由上而下、由左而右搜尋', () => {
+      const map = makeMap(TILE_TYPES.BRICK);
+      map[6][6] = TILE_TYPES.EMPTY;
+      map[4][4] = TILE_TYPES.EMPTY;
+      map[4][6] = TILE_TYPES.EMPTY;
+
+      expect(GridMovement.findNearestWalkablePosition(center(5, 5), map)).toEqual(center(4, 4));
+
+      map[4][4] = TILE_TYPES.BRICK;
+      expect(GridMovement.findNearestWalkablePosition(center(5, 5), map)).toEqual(center(6, 4));
+
+      map[4][6] = TILE_TYPES.BRICK;
+      expect(GridMovement.findNearestWalkablePosition(center(5, 5), map)).toEqual(center(6, 6));
+    });
+
+    test('同一圈中下方與右方也會被搜尋到', () => {
+      const map = makeMap(TILE_TYPES.BRICK);
+      map[5][6] = TILE_TYPES.EMPTY;
+      expect(GridMovement.findNearestWalkablePosition(center(5, 5), map)).toEqual(center(6, 5));
+
+      map[5][6] = TILE_TYPES.BRICK;
+      map[6][5] = TILE_TYPES.EMPTY;
+      expect(GridMovement.findNearestWalkablePosition(center(5, 5), map)).toEqual(center(5, 6));
+    });
+
+    test('近的圈優先於遠的圈', () => {
+      const map = makeMap(TILE_TYPES.BRICK);
+      map[3][3] = TILE_TYPES.EMPTY;
+      map[6][6] = TILE_TYPES.EMPTY;
+
+      expect(GridMovement.findNearestWalkablePosition(center(5, 5), map)).toEqual(center(6, 6));
+    });
+
+    test('最遠搜尋 3 圈', () => {
+      const map = makeMap(TILE_TYPES.BRICK);
+      map[5][8] = TILE_TYPES.EMPTY;
+      expect(GridMovement.findNearestWalkablePosition(center(5, 5), map)).toEqual(center(8, 5));
+
+      map[5][8] = TILE_TYPES.BRICK;
+      map[5][9] = TILE_TYPES.EMPTY;
+      expect(GridMovement.findNearestWalkablePosition(center(5, 5), map)).toBeNull();
+    });
+
+    test('圈內部的格子不重複檢查', () => {
+      const map = makeMap(TILE_TYPES.BRICK);
+      const walkable = jest.spyOn(GridMovement, 'isPositionWalkable');
+
+      GridMovement.findNearestWalkablePosition(center(10, 10), map);
+
+      // 1 + 8 + 16 + 24
+      expect(walkable).toHaveBeenCalledTimes(49);
+      walkable.mockRestore();
+    });
+  });
+});

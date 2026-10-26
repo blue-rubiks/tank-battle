@@ -155,6 +155,37 @@ describe('冰地滑行', () => {
       expect(tank.body.drag.x).toBe(TANK_CONFIG.NORMAL_DRAG);
     });
 
+    test('不活躍的坦克不處理地形效果；活躍的敵人也會處理', () => {
+      const mockScene = makeMockScene();
+      const ice = new Ice(mockScene, 100, 100);
+      const gameScene = makeTerrainScene([ice]);
+      const enemy = new Tank(mockScene, 100, 100, 'tank');
+      const deadEnemy = new Tank(mockScene, 100, 100, 'tank');
+      deadEnemy.active = false;
+      gameScene.enemies = { getChildren: () => [enemy, deadEnemy] };
+      gameScene.player = tank;
+      tank.x = 100;
+      tank.y = 100;
+      tank.active = false;
+
+      gameScene.updateTerrainEffects();
+
+      expect(enemy.onIce).toBe(true);
+      expect(deadEnemy.onIce).toBeUndefined();
+      expect(tank.onIce).toBeUndefined();
+    });
+
+    test('關卡沒有冰地或森林時，仍帶著旗標的坦克不應該出錯', () => {
+      const gameScene = makeTerrainScene([], []);
+      gameScene.player = tank;
+      tank.onIce = true;
+      tank.inForest = true;
+
+      expect(() => gameScene.updateTerrainEffects()).not.toThrow();
+      expect(tank.onIce).toBe(true);
+      expect(tank.inForest).toBe(true);
+    });
+
     test('森林遮蔽也應該以聚合結果判定', () => {
       const mockScene = makeMockScene();
       const forestA = new Forest(mockScene, 100, 100);

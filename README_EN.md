@@ -27,8 +27,8 @@ A complete remake of the classic NES game "Battle City" (Tank 1990) using modern
 - 🎁 **Power-ups** - 6 classic items (Star, Helmet, Grenade, etc.)
 - 🤖 **Smart AI** - Advanced AI: predictive shooting, line of sight, flanking, team coordination
 - 🗺️ **Diverse Terrain** - 7 terrain types (Brick, Steel, Water, Ice, Forest, etc.)
-- 💾 **Save System** - Auto-save progress, scores, and statistics
-- ✅ **High Quality** - 298 unit tests, all passing
+- 💾 **Save System** - Auto-save progress, scores, settings, and play records (games, kills, shots, items, play time)
+- ✅ **High Quality** - 1433 unit tests, all passing, 100% mutation score (excluding annotated rendering code)
 
 ## 🎮 Controls
 
@@ -77,7 +77,7 @@ tank-battle/
 │   ├── systems/           # Game systems (AI, collision, etc.)
 │   ├── managers/          # Managers (audio, save)
 │   └── utils/             # Utilities (constants, state machine, A* algorithm)
-├── tests/                 # Test files (298 tests)
+├── tests/                 # Test files (1433 tests)
 ├── public/                # Static assets
 │   └── data/             # Level data (5 levels)
 └── docs/                  # Technical documentation
@@ -141,13 +141,17 @@ npm run test:watch
 
 # Coverage report
 npm test -- --coverage
+
+# Mutation testing (StrykerJS)
+npm run test:mutation
 ```
 
 Test Statistics:
-- Test Suites: 22
-- Test Cases: 298
-- Test Code: 4,824 lines
+- Test Suites: 34
+- Test Cases: 1433
+- Test Code: 14,241 lines
 - Pass Rate: 100%
+- Mutation Score: 100% (excluding annotated rendering code / equivalent mutants; see [Mutation Testing](./docs/technical/MUTATION_TESTING.md), Chinese)
 
 ## 🎨 Code Quality
 
