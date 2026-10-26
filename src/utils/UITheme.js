@@ -3,6 +3,7 @@
  * 集中管理像素復古設計系統的色票、字體與文字樣式
  */
 
+// Stryker disable all : 設計 token（色票 / 字型 / 文字樣式）屬於資料，以實機畫面檢查
 // ===== 色票 =====
 export const PALETTE = {
   // 背景
@@ -163,6 +164,7 @@ export const TEXT_STYLES = {
     color: HEX.BG_0
   }
 };
+// Stryker restore all
 
 /**
  * 繪製金色角落括號（Style A 招牌邊框裝飾）
@@ -257,6 +259,7 @@ export function drawPixelHeart(g, cx, cy, scale = 2, filled = true) {
   const startY = cy - (h * scale) / 2;
 
   for (let row = 0; row < h; row++) {
+    // Stryker disable next-line EqualityOperator: 多讀一格為 undefined，不會繪製（等價）
     for (let col = 0; col < w; col++) {
       if (grid[row][col]) {
         g.fillRect(startX + col * scale, startY + row * scale, scale, scale);
@@ -294,6 +297,7 @@ export function drawPixelTank(g, cx, cy, scale = 2) {
   const startY = cy - (h * scale) / 2;
 
   for (let row = 0; row < h; row++) {
+    // Stryker disable next-line EqualityOperator: 多讀一格為 undefined，不會繪製（等價）
     for (let col = 0; col < w; col++) {
       if (grid[row][col]) {
         g.fillRect(startX + col * scale, startY + row * scale, scale, scale);

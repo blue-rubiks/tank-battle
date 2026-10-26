@@ -210,6 +210,7 @@ export default class GameOverScene extends Phaser.Scene {
         text.setColor(HEX.INK_1);
       }
     });
+    // Stryker restore all
     bg.on('pointerdown', callback);
   }
 

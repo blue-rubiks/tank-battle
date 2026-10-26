@@ -27,6 +27,7 @@ export default class PauseScene extends Phaser.Scene {
     const gameScene = this.scene.get(SCENES.GAME);
     const stats = this.captureStats(gameScene);
 
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     // ===== 半透明遮罩 =====
     this.add.rectangle(0, 0, width, height, 0x000000, 0.78).setOrigin(0);
 
@@ -78,6 +79,7 @@ export default class PauseScene extends Phaser.Scene {
     this.createButton(mx + 32, btnY + 56, modalW - 64, '↻  重 新 開 始', false, () => this.restartGame(gameScene));
     this.createButton(mx + 32, btnY + 112, modalW - 64, '⌂  返 回 主 選 單', false, () => this.backToMenu());
 
+    // Stryker restore all
     // 鍵盤
     this.input.keyboard.on('keydown-P', () => this.resumeGame());
     this.input.keyboard.on('keydown-ESC', () => this.resumeGame());
@@ -186,6 +188,7 @@ export default class PauseScene extends Phaser.Scene {
         text.setColor(HEX.INK_1);
       }
     });
+    // Stryker restore all
     bg.on('pointerdown', callback);
   }
 

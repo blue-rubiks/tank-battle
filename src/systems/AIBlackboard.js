@@ -137,8 +137,12 @@ export default class AIBlackboard {
     let baseTargetCount = 0;
 
     this.assignedTargets.forEach((target) => {
-      if (target === 'player') playerTargetCount++;
-      else if (target === 'base') baseTargetCount++;
+      if (target === 'player') {
+        playerTargetCount++;
+      } else if (target === 'base') {
+        // Stryker disable next-line UpdateOperator: 基地計數只與 0 比較，任何非 0 值等價
+        baseTargetCount++;
+      }
     });
 
     // 如果攻擊玩家的敵人太多，分配一些去攻擊基地

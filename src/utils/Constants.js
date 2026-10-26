@@ -178,6 +178,7 @@ export const DIRECTION_VECTORS = {
 };
 
 // 音效鍵值
+// Stryker disable all : 目前未被任何程式引用（保留供日後使用），沒有可驗證的行為
 export const AUDIO_KEYS = {
   BGM_MENU: 'bgm_menu',
   BGM_GAME: 'bgm_game',
@@ -190,8 +191,10 @@ export const AUDIO_KEYS = {
   SFX_LEVEL_COMPLETE: 'sfx_level_complete',
   SFX_GAME_OVER: 'sfx_game_over'
 };
+// Stryker restore all
 
 // 顏色常數
+// Stryker disable all : 目前未被任何程式引用（保留供日後使用），沒有可驗證的行為
 export const COLORS = {
   WHITE: 0xFFFFFF,
   BLACK: 0x000000,
@@ -202,6 +205,7 @@ export const COLORS = {
   ORANGE: 0xFF8800,
   GRAY: 0x808080
 };
+// Stryker restore all
 
 // 場景鍵值
 export const SCENES = {
@@ -225,11 +229,13 @@ export const DEPTHS = {
 };
 
 // 物件池配置
+// Stryker disable all : 目前未被任何程式引用（保留供日後使用），沒有可驗證的行為
 export const POOL_CONFIG = {
   BULLET_POOL_SIZE: 50,
   EXPLOSION_POOL_SIZE: 20,
   SPARK_POOL_SIZE: 30
 };
+// Stryker restore all
 
 // AI 配置
 export const AI_CONFIG = {
@@ -272,6 +278,7 @@ export const AI_CONFIG = {
 };
 
 // AI 難度設定
+// Stryker disable all : 目前未被任何程式引用（保留供日後使用），沒有可驗證的行為
 export const AI_DIFFICULTY = {
   EASY: {
     detectionRange: 200,
@@ -292,14 +299,17 @@ export const AI_DIFFICULTY = {
     accuracyTolerance: 10
   }
 };
+// Stryker restore all
 
 // 遊戲狀態
+// Stryker disable all : 目前未被任何程式引用（保留供日後使用），沒有可驗證的行為
 export const GAME_STATES = {
   PLAYING: 'playing',
   PAUSED: 'paused',
   GAME_OVER: 'game_over',
   LEVEL_COMPLETE: 'level_complete'
 };
+// Stryker restore all
 
 // 事件名稱
 export const EVENTS = {

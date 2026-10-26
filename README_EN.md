@@ -126,6 +126,7 @@ tank-battle/
 - [Advanced AI System](./docs/technical/advanced-ai.md)
 - [Tech Stack](./docs/technical/TECH_STACK.md)
 - [Deployment Guide](./docs/technical/DEPLOYMENT.md)
+- [Mutation Testing](./docs/technical/MUTATION_TESTING.md) (Chinese)
 
 ## 🧪 Testing
 

@@ -1204,7 +1204,9 @@ export default class EnemyAI {
     // Bresenham 直線演算法
     const dx = Math.abs(x1 - x0);
     const dy = Math.abs(y1 - y0);
+    // Stryker disable next-line EqualityOperator: 起訖同欄 / 同列時該軸不會前進，步進方向無影響（等價）
     const sx = x0 < x1 ? 1 : -1;
+    // Stryker disable next-line EqualityOperator: 同上
     const sy = y0 < y1 ? 1 : -1;
     let err = dx - dy;
 

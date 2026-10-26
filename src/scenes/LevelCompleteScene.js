@@ -137,6 +137,7 @@ export default class LevelCompleteScene extends Phaser.Scene {
       }).setOrigin(0.5).setLetterSpacing(4);
     }
 
+    // Stryker restore all
     // 鍵盤
     this.input.keyboard.on('keydown-ENTER', () => {
       if (isLast) this.backToMenu();
@@ -299,6 +300,7 @@ export default class LevelCompleteScene extends Phaser.Scene {
         text.setColor(HEX.INK_1);
       }
     });
+    // Stryker restore all
     bg.on('pointerdown', callback);
   }
 

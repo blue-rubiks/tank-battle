@@ -109,6 +109,7 @@ export default class GridMovement {
     if (direction === 'up' || direction === 'down') {
       if (Math.abs(alignment.offsetX) > deadZone) {
         // 檢查滑動方向是否會導致碰撞
+        // Stryker disable next-line EqualityOperator: 此處偏移量已確定大於死區（非 0），> 與 >= 等價
         const slideDir = alignment.offsetX > 0 ? -1 : 1;
         const targetX = alignment.nearestX;
 
@@ -126,6 +127,7 @@ export default class GridMovement {
     // 水平移動時修正垂直偏移
     if (direction === 'left' || direction === 'right') {
       if (Math.abs(alignment.offsetY) > deadZone) {
+        // Stryker disable next-line EqualityOperator: 同上
         const slideDir = alignment.offsetY > 0 ? -1 : 1;
         const targetY = alignment.nearestY;
 

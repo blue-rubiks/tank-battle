@@ -30,6 +30,7 @@ export default class AStar {
     }
 
     // 開放列表和關閉列表
+    // Stryker disable next-line ArrayDeclaration: 多一個無效元素只會多一次空轉迭代（等價）
     const openList = [];
     const closedList = new Set();
 

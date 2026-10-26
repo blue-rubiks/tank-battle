@@ -24,6 +24,7 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.on('complete', this.onLoadComplete, this);
   }
 
+  // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
   createLoadingBar() {
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
@@ -55,6 +56,7 @@ export default class PreloadScene extends Phaser.Scene {
     this.percentText.setOrigin(0.5, 0.5);
   }
 
+  // Stryker restore all
   onLoadProgress(value) {
     this.percentText.setText(parseInt(value * 100) + '%');
     this.progressBar.clear();
@@ -494,6 +496,7 @@ export default class PreloadScene extends Phaser.Scene {
     graphics.fillPath();
   }
 
+  // Stryker restore all
   create() {
     // 資源載入完成，切換到主選單
     this.scene.start(SCENES.MENU);

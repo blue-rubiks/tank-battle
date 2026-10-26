@@ -172,6 +172,7 @@ export default class MenuScene extends Phaser.Scene {
    * 開始按鈕（金底黑字 + 雙層描邊）+ 兩側脈動箭頭
    */
   createStartButton(cx, cy, currentLevel) {
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     const w = 320;
     const h = 64;
     const bx = cx - w / 2;
@@ -245,9 +246,11 @@ export default class MenuScene extends Phaser.Scene {
         duration: 100
       });
     });
+    // Stryker restore all
     bg.on('pointerdown', () => this.startGame(currentLevel));
   }
 
+  // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
   /**
    * 角落金色括號（CRT 螢幕感）
    */
@@ -332,6 +335,7 @@ export default class MenuScene extends Phaser.Scene {
     });
   }
 
+  // Stryker restore all
   startGame(level) {
     this.scene.start(SCENES.GAME, { level });
   }

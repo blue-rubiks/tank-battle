@@ -268,6 +268,7 @@ export default class GameScene extends Phaser.Scene {
     const offsetY = GAME_CONFIG.PLAY_OFFSET_Y;
 
     for (let y = 0; y < map.length; y++) {
+      // Stryker disable next-line EqualityOperator: 多讀一格為 undefined，不會建立任何物件（等價）
       for (let x = 0; x < map[y].length; x++) {
         const tileType = map[y][x];
         const worldX = x * tileSize + tileSize / 2;
@@ -485,6 +486,7 @@ export default class GameScene extends Phaser.Scene {
     this.createBottomBar(W, H, BOT_H);
   }
 
+  // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
   /**
    * 建立頂部 HUD 條（44px）
    * 結構：[STAGE chip] [SCORE / HI] [LIVES hearts] [ENEMY GRID]
@@ -609,6 +611,8 @@ export default class GameScene extends Phaser.Scene {
     this.levelText = this.stageChipText;
   }
 
+  // Stryker restore all
+  // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
   /**
    * 建立底部狀態條
    */
@@ -660,6 +664,7 @@ export default class GameScene extends Phaser.Scene {
     this.uiElements.push(right);
   }
 
+  // Stryker restore all
   /**
    * 渲染愛心生命列
    */
@@ -749,6 +754,7 @@ export default class GameScene extends Phaser.Scene {
         targets: element,
         alpha: targetAlpha,
         duration: 200,
+        // Stryker disable next-line StringLiteral: 緩動曲線（純視覺）
         ease: 'Power2'
       });
     });
@@ -766,6 +772,7 @@ export default class GameScene extends Phaser.Scene {
       this.toggleMessage.destroy();
     }
 
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     // 創建提示訊息（顯示於可玩區域底部上方）
     this.toggleMessage = this.add.text(
       GAME_CONFIG.WIDTH / 2,
@@ -861,6 +868,7 @@ export default class GameScene extends Phaser.Scene {
       this.powerUpMessage.destroy();
     }
 
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     // 創建道具提示訊息（可玩區域上方置中顯示）
     this.powerUpMessage = this.add.text(
       GAME_CONFIG.WIDTH / 2,
@@ -1089,6 +1097,7 @@ export default class GameScene extends Phaser.Scene {
     const basePos = this.levelData.basePosition;
     const tileSize = GAME_CONFIG.TILE_SIZE;
     this.baseProtectionWalls = [];
+    // Stryker disable next-line ArrayDeclaration: 多出的無效紀錄在恢復時找不到對應工廠而被略過（等價）
     this.savedBaseWalls = []; // 保存原本的牆
 
     // 基地周圍一圈變成鋼牆
@@ -1096,15 +1105,20 @@ export default class GameScene extends Phaser.Scene {
       for (let dy = -1; dy <= 1; dy++) {
         if (dx === 0 && dy === 0) continue; // 跳過基地本身
 
+        // Stryker disable next-line ArithmeticOperator: dx / dy 在 -1~1 對稱走訪，正負互換得到同一組格子（等價）
         const mapX = basePos.x + dx;
+        // Stryker disable next-line ArithmeticOperator: 同上
         const mapY = basePos.y + dy;
         const worldX = mapX * tileSize + tileSize / 2;
         const worldY = mapY * tileSize + tileSize / 2 + GAME_CONFIG.PLAY_OFFSET_Y;
 
         // 查找並移除原本的牆
+        // 牆壁座標必定落在格子中心，< 1 與 <= 1 的容差判斷等價
         const existingWall = this.collisionSystem.wallGroup.getChildren().find(wall =>
           wall.active &&
+          // Stryker disable next-line EqualityOperator: 見上
           Math.abs(wall.x - worldX) < 1 &&
+          // Stryker disable next-line EqualityOperator: 見上
           Math.abs(wall.y - worldY) < 1
         );
 
@@ -1162,6 +1176,7 @@ export default class GameScene extends Phaser.Scene {
           this.setMapTileAt(wallInfo.x, wallInfo.y, factory.tile);
         }
       });
+      // Stryker disable next-line ArrayDeclaration: 多出的無效紀錄在恢復時找不到對應工廠而被略過（等價）
       this.savedBaseWalls = [];
     }
   }
@@ -1433,6 +1448,7 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
+  // Stryker restore all
   // ==========================================
   // 道具效果方法
   // ==========================================
@@ -1565,6 +1581,7 @@ export default class GameScene extends Phaser.Scene {
 
     // 垂直軸鎖定車道中心
     const lock = GridMovement.lockToLane(player, moveDirection, TANK_CONFIG.GRID_LANE_GLIDE);
+    // Stryker disable next-line ConditionalExpression: 有輸入方向時 lock 恆有值（防禦性判斷，等價）
     if (lock) {
       player[lock.axis] += lock.amount;
     }

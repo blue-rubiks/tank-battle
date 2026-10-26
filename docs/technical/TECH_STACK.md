@@ -234,7 +234,7 @@ module.exports = {
 
 **檢查命令：**
 ```bash
-npm run lint      # 檢查代碼
+npm run lint      # 檢查代碼（src 與 tests）
 npm run lint:fix  # 自動修復問題
 ```
 
@@ -278,6 +278,7 @@ describe('SaveManager', () => {
 npm test              # 運行所有測試
 npm test -- --watch   # 監聽模式
 npm test -- --coverage  # 生成覆蓋率報告
+npm run test:mutation   # 變異測試（StrykerJS）
 ```
 
 ---
@@ -451,6 +452,7 @@ https://<用戶名>.github.io/<倉庫名>/
 | **代碼檢查** | ESLint | 10.x | 代碼品質 |
 | **測試框架** | Jest | 30.x | 單元測試 |
 | **DOM 模擬** | jsdom | 30.x | 測試環境 |
+| **變異測試** | StrykerJS | 9.x | 測試有效性 |
 | **CI/CD** | GitHub Actions | - | 自動部署 |
 | **托管** | GitHub Pages | - | 靜態網站 |
 

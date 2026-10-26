@@ -30,3 +30,6 @@ yarn-error.log*
 # Test coverage
 coverage/
 .claude/
+# Mutation testing (Stryker)
+reports/
+.stryker-tmp/

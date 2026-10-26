@@ -126,6 +126,7 @@ tank-battle/
 - [進階 AI 系統](./docs/technical/advanced-ai.md)
 - [技術選型說明](./docs/technical/TECH_STACK.md)
 - [部署指南](./docs/technical/DEPLOYMENT.md)
+- [變異測試](./docs/technical/MUTATION_TESTING.md)
 
 ## 🧪 測試
 
