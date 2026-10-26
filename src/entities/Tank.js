@@ -11,6 +11,9 @@ import {
   DEPTHS
 } from '../utils/Constants';
 
+// 冰凍時的染色（青色）
+const FROZEN_TINT = 0x00FFFF;
+
 export default class Tank extends Phaser.Physics.Arcade.Sprite {
   /**
    * 建構子
@@ -45,6 +48,13 @@ export default class Tank extends Phaser.Physics.Arcade.Sprite {
     this.isDestroyed = false;
     this.isInvincible = false;
     this.isFrozen = false;
+
+    // 無敵 / 冰凍結束時間：多段效果重疊時只有最晚結束的那段能解除
+    this.invincibleUntil = 0;
+    this.frozenUntil = 0;
+
+    // 基礎染色：閃紅、解凍結束後恢復成此顏色（null = 不染色）
+    this.baseTint = null;
 
     // 設定深度
     this.setDepth(DEPTHS.ENTITY);
@@ -194,9 +204,24 @@ export default class Tank extends Phaser.Physics.Arcade.Sprite {
 
     this.scene.time.delayedCall(100, () => {
       if (this.active) {
-        this.clearTint();
+        this._restoreTint();
       }
     });
+  }
+
+  /**
+   * 恢復目前應有的顏色（閃紅、解凍結束時呼叫）
+   * 不可直接 clearTint：會洗掉敵人類型色與裝甲血量色
+   * @private
+   */
+  _restoreTint() {
+    if (this.isFrozen) {
+      this.setTint(FROZEN_TINT);
+    } else if (this.baseTint !== null) {
+      this.setTint(this.baseTint);
+    } else {
+      this.clearTint();
+    }
   }
 
   /**
@@ -223,6 +248,11 @@ export default class Tank extends Phaser.Physics.Arcade.Sprite {
   setInvincible(duration) {
     this.isInvincible = true;
 
+    // 多段無敵重疊時（例如重生無敵中吃到第 4 顆星），只有最晚結束的那段能解除，
+    // 否則較早那段的閃爍結束時會提前取消後來給的無敵
+    const endsAt = this.scene.time.now + duration;
+    this.invincibleUntil = Math.max(this.invincibleUntil, endsAt);
+
     // 閃爍效果
     this.scene.tweens.add({
       targets: this,
@@ -231,7 +261,7 @@ export default class Tank extends Phaser.Physics.Arcade.Sprite {
       yoyo: true,
       repeat: Math.floor(duration / 400),
       onComplete: () => {
-        if (this.active) {
+        if (this.active && endsAt === this.invincibleUntil) {
           this.isInvincible = false;
           this.setAlpha(1);
         }
@@ -246,22 +276,24 @@ export default class Tank extends Phaser.Physics.Arcade.Sprite {
   setFrozen(duration) {
     this.isFrozen = true;
     this.stop(true);
-    this.setTint(0x00FFFF);
+    this.setTint(FROZEN_TINT);
+
+    // 冰凍中再次冰凍（連吃兩個時鐘）時以最晚結束者為準，避免第一次的計時提前解凍
+    const endsAt = this.scene.time.now + duration;
+    this.frozenUntil = Math.max(this.frozenUntil, endsAt);
 
     this.scene.time.delayedCall(duration, () => {
-      if (this.active) {
+      if (this.active && endsAt === this.frozenUntil) {
         this.isFrozen = false;
-        this.clearTint();
+        this._restoreTint();
       }
     });
   }
 
   /**
    * 每幀更新
-   * @param {number} time - 遊戲開始後的總時間
-   * @param {number} delta - 距離上一幀的時間差
+   * 子類別可以覆寫此方法，覆寫版本會收到 Phaser 傳入的 (time, delta)
    */
-  update(time, delta) {
-    // 子類別可以覆寫此方法
+  update() {
   }
 }

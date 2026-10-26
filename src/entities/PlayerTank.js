@@ -30,6 +30,10 @@ export default class PlayerTank extends Tank {
     // 護盾精靈
     this.shieldSprite = null;
 
+    // 頭盔 / 裝甲護盾結束時間：重複取得時以最晚結束者為準
+    this.shieldUntil = 0;
+    this.armorShieldUntil = 0;
+
     // 設定玩家速度
     this.speed = this.baseSpeed;
 
@@ -150,6 +154,7 @@ export default class PlayerTank extends Tank {
 
     // 裝甲護盾持續 5 秒
     this.setInvincible(5000);
+    this.armorShieldUntil = this.scene.time.now + 5000;
 
     this.scene.time.delayedCall(5000, () => {
       if (this.shieldSprite && !this.powerUps.shield) {
@@ -209,9 +214,20 @@ export default class PlayerTank extends Tank {
       });
     }
 
-    // 定時移除護盾
+    // 定時移除護盾：護盾期間再拾取頭盔時只有最後一頂的計時有效
+    const endsAt = this.scene.time.now + POWERUP_TYPES.HELMET.duration;
+    this.shieldUntil = Math.max(this.shieldUntil, endsAt);
+
     this.scene.time.delayedCall(POWERUP_TYPES.HELMET.duration, () => {
-      this._removeShield();
+      // 已陣亡（destroy 時已移除護盾，且 Phaser 會清掉 this.scene）或已被後來的頭盔延長
+      if (!this.active || endsAt !== this.shieldUntil) return;
+
+      // 裝甲護盾（第 4 顆星）仍有效時保留護盾外觀，交給裝甲計時移除
+      if (this.scene.time.now < this.armorShieldUntil) {
+        this.powerUps.shield = false;
+      } else {
+        this._removeShield();
+      }
     });
   }
 

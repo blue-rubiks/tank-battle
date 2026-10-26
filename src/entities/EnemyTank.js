@@ -37,8 +37,9 @@ export default class EnemyTank extends Tank {
     this.bulletSpeed = this.config.bulletSpeed;
     this.score = this.config.score;
 
-    // 設定顏色
-    this.setTint(this.config.color);
+    // 設定顏色（閃紅、解凍後恢復成類型色）
+    this.baseTint = this.config.color;
+    this.setTint(this.baseTint);
 
     // AI 相關
     this.aiController = null;
@@ -77,12 +78,13 @@ export default class EnemyTank extends Tank {
     if (this.isDestroyed || this.isInvincible) return;
 
     this.health -= damage;
-    this._flashRed();
 
-    // 裝甲坦克根據血量變色
+    // 裝甲坦克根據血量變色（先更新基礎色，閃紅結束後才顯示，紅閃不被覆蓋）
     if (this.enemyType === 'ARMOR') {
       this._updateArmorColor();
     }
+
+    this._flashRed();
 
     if (this.health <= 0) {
       this._onDeath();
@@ -103,7 +105,7 @@ export default class EnemyTank extends Tank {
 
     const colorIndex = this.maxHealth - this.health;
     if (colorIndex < colors.length) {
-      this.setTint(colors[colorIndex]);
+      this.baseTint = colors[colorIndex];
     }
   }
 

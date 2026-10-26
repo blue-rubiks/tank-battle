@@ -793,22 +793,23 @@ export default class GameScene extends Phaser.Scene {
       ease: 'Power2'
     });
 
-    // 1.5 秒後淡出並銷毀
+    // Stryker restore all
+    // 1.5 秒後淡出並銷毀（已被新訊息取代時，交給新訊息自己的計時）
+    const shown = this.toggleMessage;
     this.time.delayedCall(1500, () => {
-      if (this.toggleMessage) {
-        this.tweens.add({
-          targets: this.toggleMessage,
-          alpha: 0,
-          duration: 300,
-          ease: 'Power2',
-          onComplete: () => {
-            if (this.toggleMessage) {
-              this.toggleMessage.destroy();
-              this.toggleMessage = null;
-            }
-          }
-        });
-      }
+      if (this.toggleMessage !== shown) return;
+      this.tweens.add({
+        targets: shown,
+        alpha: 0,
+        duration: 300,
+        // Stryker disable next-line StringLiteral: 緩動曲線（純視覺）
+        ease: 'Power2',
+        onComplete: () => {
+          shown.destroy();
+          // 淡出期間若已顯示新訊息，保留新訊息
+          if (this.toggleMessage === shown) this.toggleMessage = null;
+        }
+      });
     });
   }
 
@@ -892,23 +893,25 @@ export default class GameScene extends Phaser.Scene {
       ease: 'Back.easeOut'
     });
 
-    // 2.5 秒後淡出並銷毀
+    // Stryker restore all
+    // 2.5 秒後淡出並銷毀（已被新訊息取代時，交給新訊息自己的計時）
+    const shown = this.powerUpMessage;
     this.time.delayedCall(2500, () => {
-      if (this.powerUpMessage) {
-        this.tweens.add({
-          targets: this.powerUpMessage,
-          alpha: 0,
-          y: GAME_CONFIG.PLAY_OFFSET_Y + 36,
-          duration: 300,
-          ease: 'Power2',
-          onComplete: () => {
-            if (this.powerUpMessage) {
-              this.powerUpMessage.destroy();
-              this.powerUpMessage = null;
-            }
-          }
-        });
-      }
+      if (this.powerUpMessage !== shown) return;
+      this.tweens.add({
+        targets: shown,
+        alpha: 0,
+        // Stryker disable next-line ArithmeticOperator: 淡出位移（純視覺）
+        y: GAME_CONFIG.PLAY_OFFSET_Y + 36,
+        duration: 300,
+        // Stryker disable next-line StringLiteral: 緩動曲線（純視覺）
+        ease: 'Power2',
+        onComplete: () => {
+          shown.destroy();
+          // 淡出期間若已顯示新訊息，保留新訊息
+          if (this.powerUpMessage === shown) this.powerUpMessage = null;
+        }
+      });
     });
   }
 
