@@ -564,7 +564,7 @@ export default class AIBlackboard {
 
     let bestPoint = null;
     let bestScore = -Infinity;
-    let bestIndex = -1;
+    let bestIndex = null;
 
     this.patrolPoints.forEach((point, index) => {
       if (assignedIndices.has(index)) return;
@@ -574,8 +574,11 @@ export default class AIBlackboard {
 
       // 理想距離是 150-300，太近或太遠都扣分
       let score = 100;
+      // （兩個區間互斥，各自獨立判斷）
+      // Stryker disable next-line EqualityOperator: 邊界上扣分為 0，< 與 <= 等價
       if (dist < 100) score -= (100 - dist);
-      else if (dist > 400) score -= (dist - 400) / 5;
+      // Stryker disable next-line EqualityOperator: 邊界上扣分為 0，> 與 >= 等價
+      if (dist > 400) score -= (dist - 400) / 5;
 
       // 隨機因素增加多樣性
       score += Math.random() * 30;
@@ -587,7 +590,7 @@ export default class AIBlackboard {
       }
     });
 
-    if (bestPoint && bestIndex >= 0) {
+    if (bestPoint) {
       this.assignedPatrolPoints.set(enemyId, bestIndex);
       return bestPoint;
     }

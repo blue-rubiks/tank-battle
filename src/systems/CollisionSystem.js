@@ -153,13 +153,8 @@ export default class CollisionSystem {
   /**
    * 坦克與牆壁碰撞
    */
-  onTankWallCollision(tank, wall) {
-    // Phaser 自動處理分離
-
-    // 水域特殊處理：阻擋坦克移動
-    if (wall.type === 'water') {
-      // 水域已經作為靜態物理物件，會自動阻擋
-    }
+  onTankWallCollision(tank) {
+    // Phaser 自動處理分離（水域也是靜態物理物件，同樣會阻擋坦克）
 
     // 如果是敵人坦克，讓 AI 改變方向
     if (tank.aiController) {
@@ -264,7 +259,8 @@ export default class CollisionSystem {
    * 敵人之間的子彈不會抵銷
    */
   onBulletBulletCollision(bullet1, bullet2) {
-    if (!bullet1.active || !bullet2.active || bullet1 === bullet2) {
+    // （同一顆子彈與自己重疊時兩邊類型相同，會被下方的類型檢查略過）
+    if (!bullet1.active || !bullet2.active) {
       return;
     }
 

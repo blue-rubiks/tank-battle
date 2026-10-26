@@ -25,10 +25,9 @@ export default class Base extends Phaser.Physics.Arcade.Sprite {
 
   /**
    * 受到傷害
-   * 基地一擊即毀
-   * @param {number} damage - 傷害值
+   * 基地一擊即毀，呼叫端傳入的傷害值不影響結果
    */
-  takeDamage(damage) {
+  takeDamage() {
     if (this.isDestroyed) return;
 
     this.isDestroyed = true;

@@ -132,13 +132,13 @@ export default class PreloadScene extends Phaser.Scene {
     try {
       // 生成所有音效
       SoundGenerator.generateAllSounds(this);
-      console.log('✓ 復古音效生成成功');
     } catch (error) {
       console.warn('音效生成失敗:', error);
       // 即使音效生成失敗，遊戲仍可繼續
     }
   }
 
+  // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
   /**
    * 創建坦克精靈（像素藝術風格）
    */

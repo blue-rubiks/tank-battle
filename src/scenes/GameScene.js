@@ -4,7 +4,7 @@
  */
 
 import Phaser from 'phaser';
-import { SCENES, GAME_CONFIG, TANK_CONFIG, ENEMY_TYPES, EVENTS, DEPTHS, TILE_TYPES, POWERUP_TYPES } from '../utils/Constants';
+import { SCENES, GAME_CONFIG, TANK_CONFIG, EVENTS, DEPTHS, TILE_TYPES, POWERUP_TYPES } from '../utils/Constants';
 import {
   PALETTE,
   HEX,
@@ -305,9 +305,7 @@ export default class GameScene extends Phaser.Scene {
           break;
         }
 
-        case TILE_TYPES.BASE:
-          // 基地在 createBase() 中單獨建立
-          break;
+        // TILE_TYPES.BASE：基地在 createBase() 中單獨建立
         }
       }
     }
@@ -408,7 +406,6 @@ export default class GameScene extends Phaser.Scene {
             const newY = y + dy;
 
             if (this.isPositionSafe(newX, newY, map)) {
-              console.log(`✅ 找到安全位置: (${newX}, ${newY})`);
               return { x: newX, y: newY };
             }
           }
@@ -451,12 +448,8 @@ export default class GameScene extends Phaser.Scene {
    * @returns {boolean} 是否安全
    */
   isPositionSafe(x, y, map) {
-    // 檢查是否超出地圖邊界
-    if (y < 0 || y >= map.length || x < 0 || x >= map[0].length) {
-      return false;
-    }
-
-    const tileType = map[y][x];
+    // 超出地圖時為 undefined（不安全）
+    const tileType = GridMovement.tileAt(map, x, y);
 
     // 安全的地形類型：空地(0)、冰地(4)、森林(5)
     const safeTiles = [TILE_TYPES.EMPTY, TILE_TYPES.ICE, TILE_TYPES.FOREST];
@@ -707,8 +700,6 @@ export default class GameScene extends Phaser.Scene {
       this.enemyGridLabel.setText(`敵 ${remaining}/${total}`);
     }
 
-    if (total === 0) return;
-
     const cols = 5;
     const rows = Math.max(3, Math.ceil(total / cols));
     const cellSize = 8;
@@ -857,7 +848,8 @@ export default class GameScene extends Phaser.Scene {
       message += `\n⭐ Level ${starLevel}：${starEffects[starLevel]}`;
     } else if (config.duration > 0) {
       message += `\n${description}（${config.duration / 1000}秒）`;
-    } else if (config.duration === 0 && powerUpType !== 'TANK') {
+    } else if (powerUpType !== 'TANK') {
+      // 沒有持續時間的道具（坦克是永久加命，不標示）
       message += `\n${description}（立即生效）`;
     } else {
       message += `\n${description}`;
@@ -1083,10 +1075,9 @@ export default class GameScene extends Phaser.Scene {
 
     // 防護中重複拾取：只重設計時器（鋼牆已存在，原牆紀錄保留第一次的）
     // 不可重建牆，否則會把第一次的鋼牆誤存成「原牆」、原磚牆紀錄遺失
+    // （baseProtected 與計時器同時設定、同時清除，防護中必定有計時器）
     if (this.gameState.baseProtected) {
-      if (this.baseProtectionTimer) {
-        this.baseProtectionTimer.remove(false);
-      }
+      this.baseProtectionTimer.remove(false);
       this.baseProtectionTimer = this.time.delayedCall(duration, () => this._endBaseProtection());
       return;
     }
@@ -1202,7 +1193,7 @@ export default class GameScene extends Phaser.Scene {
     this.collisionSystem.addPlayer(this.player);
   }
 
-  onEnemyDestroyed(enemy) {
+  onEnemyDestroyed() {
     this.gameState.enemiesRemaining--;
     this.gameState.enemiesKilled++;
     this.updateEnemies();
@@ -1210,17 +1201,13 @@ export default class GameScene extends Phaser.Scene {
     // 經典模式：第 4、11、18 輛敵人掉落道具
     const powerUpTriggers = [4, 11, 18];
     if (powerUpTriggers.includes(this.gameState.enemiesKilled)) {
+      // getRandomEmptyPosition 找不到空位時會退回地圖中央，必定有位置
       const pos = this.getRandomEmptyPosition();
-
-      if (pos) {
-        const tileSize = GAME_CONFIG.TILE_SIZE;
-        const worldX = pos.x * tileSize + tileSize / 2;
-        const worldY = pos.y * tileSize + tileSize / 2 + GAME_CONFIG.PLAY_OFFSET_Y;
-        // 不指定類型，讓 spawnPowerUp 隨機選擇
-        this.spawnPowerUp(worldX, worldY);
-
-        console.log(`💎 道具掉落！第 ${this.gameState.enemiesKilled} 個敵人被擊毀`);
-      }
+      const tileSize = GAME_CONFIG.TILE_SIZE;
+      const worldX = pos.x * tileSize + tileSize / 2;
+      const worldY = pos.y * tileSize + tileSize / 2 + GAME_CONFIG.PLAY_OFFSET_Y;
+      // 不指定類型，讓 spawnPowerUp 隨機選擇
+      this.spawnPowerUp(worldX, worldY);
     }
 
     // 檢查關卡是否完成

@@ -3,7 +3,7 @@
  */
 
 import Phaser from 'phaser';
-import { GAME_CONFIG, SCENES } from '../utils/Constants';
+import { GAME_CONFIG } from '../utils/Constants';
 
 // 匯入場景（稍後建立）
 import BootScene from '../scenes/BootScene';

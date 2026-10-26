@@ -98,26 +98,22 @@ export default class PlayerTank extends Tank {
     case 1:
       // Level 1: 提升移動速度
       this.speed = this.baseSpeed * 1.3;
-      console.log('⭐ 星星 Level 1：移動速度提升！');
       break;
 
     case 2:
       // Level 2: 增加同時射擊數（可發射 2 顆子彈）
       this.maxBullets = 2;
-      console.log('⭐⭐ 星星 Level 2：可同時發射 2 顆子彈！');
       break;
 
     case 3:
       // Level 3: 子彈可破壞鋼牆（傷害值提升）
       this.bulletDamage = 2;
-      console.log('⭐⭐⭐ 星星 Level 3：子彈可破壞鋼牆！');
       break;
 
     case 4:
       // Level 4: 裝甲坦克（短暫無敵護盾）
       this.maxBullets = 3;
       this._applyArmorShield();
-      console.log('⭐⭐⭐⭐ 星星 Level 4：裝甲坦克！最大火力！');
       break;
     }
 

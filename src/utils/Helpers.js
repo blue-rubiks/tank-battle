@@ -3,8 +3,6 @@
  * 提供常用的工具方法
  */
 
-import Phaser from 'phaser';
-
 /**
  * 計算兩點之間的距離
  * @param {number} x1 - 點 1 的 X 座標

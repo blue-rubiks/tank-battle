@@ -446,16 +446,11 @@ export default class EnemyAI {
     // 選擇目標（基於優先級和隨機性）
     this._selectTarget(player, base);
 
-    // 如果沒有有效目標，巡邏
-    if (!this.currentTarget) {
-      this.stateMachine.setState('patrol');
-      return;
-    }
-
     // 根據目標決定行為
+    // （玩家與基地都不可用時 currentTarget 為 null，下方同樣會改為巡邏）
     const target = this.currentTarget === 'player' ? player : base;
 
-    if (!target || (target.isDestroyed !== undefined && target.isDestroyed)) {
+    if (!target || target.isDestroyed) {
       this.currentTarget = null;
       this.stateMachine.setState('patrol');
       return;
@@ -496,7 +491,7 @@ export default class EnemyAI {
     // 如果已有目標且目標有效，有一定機率保持當前目標（避免頻繁切換）
     if (this.currentTarget) {
       const target = this.currentTarget === 'player' ? player : base;
-      if (target && (!target.isDestroyed || target.isDestroyed === false)) {
+      if (target && !target.isDestroyed) {
         // 80% 機率保持當前目標
         if (Math.random() < 0.8) {
           return;

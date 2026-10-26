@@ -39,19 +39,21 @@ export default class AStar {
       ...startNode,
       g: 0, // 從起點到當前點的成本
       h: this.heuristic(startNode, goalNode), // 從當前點到終點的估計成本
-      f: 0, // f = g + h
       parent: null
     };
-    startPathNode.f = startPathNode.g + startPathNode.h;
 
     openList.push(startPathNode);
+
+    // 評估值 f = g + h（由 g、h 即時計算，更新 g 時不需另外同步）
+    const f = node => node.g + node.h;
 
     // A* 主循環
     while (openList.length > 0) {
       // 找到 f 值最小的節點
       let currentIndex = 0;
       for (let i = 1; i < openList.length; i++) {
-        if (openList[i].f < openList[currentIndex].f) {
+        // Stryker disable next-line EqualityOperator: 同分時改選後者，只影響選中哪一條同樣最短的路徑（等價）
+        if (f(openList[i]) < f(openList[currentIndex])) {
           currentIndex = i;
         }
       }
@@ -93,13 +95,15 @@ export default class AStar {
             ...neighbor,
             g: gScore,
             h: h,
-            f: gScore + h,
             parent: current
           });
-        } else if (gScore < existingNode.g) {
-          // 找到更好的路徑，更新節點
+          continue;
+        }
+
+        // 找到更好的路徑，更新節點
+        // Stryker disable next-line EqualityOperator: 同長度時改換父節點，只影響選中哪一條同樣最短的路徑（等價）
+        if (gScore < existingNode.g) {
           existingNode.g = gScore;
-          existingNode.f = gScore + existingNode.h;
           existingNode.parent = current;
         }
       }
@@ -209,10 +213,8 @@ export default class AStar {
       current = current.parent;
     }
 
-    // 移除第一個點（起點）
-    if (path.length > 0) {
-      path.shift();
-    }
+    // 移除第一個點（起點）；路徑至少包含終點本身
+    path.shift();
 
     return path;
   }

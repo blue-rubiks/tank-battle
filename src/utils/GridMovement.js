@@ -70,8 +70,6 @@ export default class GridMovement {
    * @returns {Object} { alignedX, alignedY, offsetX, offsetY }
    */
   static checkAlignment(tank, threshold = 4) {
-    const tileSize = GAME_CONFIG.TILE_SIZE;
-
     // 計算最近的格子中心
     const nearestX = this.snapXToGrid(tank.x);
     const nearestY = this.snapYToGrid(tank.y);
@@ -205,6 +203,18 @@ export default class GridMovement {
   }
 
   /**
+   * 取得格子的地形
+   * @param {Array} map - 地圖數據
+   * @param {number} gridX - 格子 X
+   * @param {number} gridY - 格子 Y
+   * @returns {number|undefined} 地形類型，超出地圖時為 undefined
+   */
+  static tileAt(map, gridX, gridY) {
+    const row = map[gridY];
+    return row ? row[gridX] : undefined;
+  }
+
+  /**
    * 檢查位置是否可行走
    * @param {number} x - X 像素座標
    * @param {number} y - Y 像素座標
@@ -251,8 +261,6 @@ export default class GridMovement {
    * @returns {boolean}
    */
   static canMoveInDirection(tank, direction, map) {
-    if (!map) return true;
-
     const tileSize = GAME_CONFIG.TILE_SIZE;
     const vector = DIRECTION_VECTORS[direction];
 
@@ -305,7 +313,6 @@ export default class GridMovement {
   static findNearestWalkablePosition(tank, map) {
     if (!map) return null;
 
-    const tileSize = GAME_CONFIG.TILE_SIZE;
     const { gridX, gridY } = this.pixelToGrid(tank.x, tank.y);
 
     // 螺旋搜索
