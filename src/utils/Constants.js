@@ -13,7 +13,8 @@ export const GAME_CONFIG = {
   HUD_TOP_HEIGHT: 44,
   HUD_BOTTOM_HEIGHT: 36,
   TILE_SIZE: 32,
-  MAP_SIZE: 26
+  MAP_SIZE: 26,
+  TOTAL_LEVELS: 5       // 關卡總數（public/data/level_1 ~ level_5.json）
 };
 
 // 坦克配置
@@ -318,14 +319,17 @@ export const EVENTS = {
   ENEMY_DESTROYED: 'enemy_destroyed',
   BASE_DESTROYED: 'base_destroyed',
   POWERUP_COLLECTED: 'powerup_collected',
+  STAR_UPGRADED: 'star_upgraded',
   LEVEL_COMPLETE: 'level_complete',
   SCORE_CHANGED: 'score_changed',
   LIVES_CHANGED: 'lives_changed'
 };
 
 // 本地儲存鍵值
+// Stryker disable all : 目前未被任何程式引用（保留供日後使用），沒有可驗證的行為
 export const STORAGE_KEYS = {
   HIGH_SCORE: 'tank_battle_high_score',
   CURRENT_LEVEL: 'tank_battle_current_level',
   SETTINGS: 'tank_battle_settings'
 };
+// Stryker restore all

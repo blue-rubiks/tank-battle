@@ -3,7 +3,7 @@
  */
 
 import Phaser from 'phaser';
-import { SCENES } from '../utils/Constants';
+import { SCENES, GAME_CONFIG } from '../utils/Constants';
 import {
   PALETTE,
   HEX,
@@ -125,20 +125,24 @@ export default class GameOverScene extends Phaser.Scene {
     this.createButton(mx + 36, btnY, modalW - 72, '↻  再 來 一 局', true, () => this.restart());
     this.createButton(mx + 36, btnY + 56, modalW - 72, '⌂  返 回 主 選 單', false, () => this.backToMenu());
 
+    // Stryker restore all
     this.input.keyboard.on('keydown-ENTER', () => this.restart());
     this.input.keyboard.on('keydown-ESC', () => this.backToMenu());
   }
 
   drawBreakdown(x, y, w) {
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     const g = this.add.graphics();
     g.lineStyle(1, PALETTE.GOLD_DEEP, 0.7);
     this.drawDashedLine(g, x, y, x + w, y, 4, 4);
 
+    // Stryker restore all
     const rows = [
-      { k: 'STAGE REACHED', v: `${formatStage(this.level)} / 35` },
+      { k: 'STAGE REACHED', v: `${formatStage(this.level)} / ${formatStage(GAME_CONFIG.TOTAL_LEVELS)}` },
       { k: 'FINAL SCORE', v: formatScore(this.finalScore) }
     ];
 
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     const rowH = 28;
     rows.forEach((row, i) => {
       const ry = y + 14 + i * rowH;

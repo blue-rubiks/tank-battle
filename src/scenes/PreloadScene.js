@@ -4,7 +4,7 @@
  */
 
 import Phaser from 'phaser';
-import { SCENES } from '../utils/Constants';
+import { SCENES, GAME_CONFIG } from '../utils/Constants';
 import SoundGenerator from '../utils/SoundGenerator';
 
 export default class PreloadScene extends Phaser.Scene {
@@ -118,11 +118,10 @@ export default class PreloadScene extends Phaser.Scene {
    * 載入關卡數據
    */
   loadLevelData() {
-    // 載入 5 個關卡的配置檔案
-    for (let i = 1; i <= 5; i++) {
+    // 載入所有關卡的配置檔案
+    for (let i = 1; i <= GAME_CONFIG.TOTAL_LEVELS; i++) {
       this.load.json(`level_${i}`, `data/level_${i}.json`);
     }
-    console.log('✓ 開始載入關卡數據 (1-5)');
   }
 
   /**

@@ -229,7 +229,8 @@ export default class AStar {
       return path;
     }
 
-    const simplified = [path[0]];
+    // 第一次迭代方向必定改變，會自動放入起點；不可預先放入，否則起點重複
+    const simplified = [];
     let lastDirection = null;
 
     for (let i = 1; i < path.length; i++) {

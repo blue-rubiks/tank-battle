@@ -949,8 +949,8 @@ export default class GameScene extends Phaser.Scene {
       }
     });
 
-    // 洗牌
-    this.enemyQueue.sort(() => Math.random() - 0.5);
+    // 洗牌（Fisher-Yates；sort 搭配隨機比較函式的結果並非均勻分布）
+    Phaser.Utils.Array.Shuffle(this.enemyQueue);
 
     // 記錄最大同時敵人數
     this.maxEnemiesOnScreen = this.levelData.specialRules?.maxEnemiesOnScreen || 3;

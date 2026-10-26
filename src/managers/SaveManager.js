@@ -3,6 +3,8 @@
  * 使用 LocalStorage 儲存遊戲進度、分數等資料
  */
 
+import { GAME_CONFIG } from '../utils/Constants';
+
 export default class SaveManager {
   constructor() {
     this.SAVE_KEY = 'tank_battle_save_data';
@@ -41,11 +43,21 @@ export default class SaveManager {
       }
 
       // 沒有存檔，返回預設資料
-      return { ...this.defaultData };
+      return this._createDefaultData();
     } catch (error) {
       console.error('載入存檔失敗:', error);
-      return { ...this.defaultData };
+      return this._createDefaultData();
     }
+  }
+
+  /**
+   * 建立一份全新的預設資料（深拷貝）
+   * 不可用淺拷貝：巢狀陣列 / 物件會與範本共用，呼叫端修改後（如解鎖關卡）
+   * 預設值就被汙染，reset() 之後也回不到初始狀態
+   * @private
+   */
+  _createDefaultData() {
+    return JSON.parse(JSON.stringify(this.defaultData));
   }
 
   /**
@@ -155,13 +167,14 @@ export default class SaveManager {
     data.statistics.levelsCompleted++;
 
     // 更新最高分
+    // Stryker disable next-line EqualityOperator: 分數相同時寫入同值（等價）
     if (score > data.highScore) {
       data.highScore = score;
     }
 
-    // 解鎖下一關（如果有的話，最多到第 5 關）
+    // 解鎖下一關（如果有的話，最多到最後一關）
     const nextLevel = level + 1;
-    if (nextLevel <= 5) {
+    if (nextLevel <= GAME_CONFIG.TOTAL_LEVELS) {
       // 內聯解鎖邏輯，避免多次 load/save
       if (!data.unlockedLevels.includes(nextLevel)) {
         data.unlockedLevels.push(nextLevel);

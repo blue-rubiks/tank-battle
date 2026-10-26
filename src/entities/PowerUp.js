@@ -14,11 +14,12 @@ export default class PowerUp extends Phaser.Physics.Arcade.Sprite {
    * @param {string} type - 道具類型
    */
   constructor(scene, x, y, type = 'STAR') {
-    const config = POWERUP_TYPES[type];
+    let config = POWERUP_TYPES[type];
 
     if (!config) {
       console.error(`Unknown power-up type: ${type}`);
       type = 'STAR';
+      config = POWERUP_TYPES[type];
     }
 
     super(scene, x, y, config.texture);

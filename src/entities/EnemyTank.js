@@ -14,11 +14,12 @@ export default class EnemyTank extends Tank {
    * @param {string} type - 敵人類型 (BASIC, FAST, POWER, ARMOR)
    */
   constructor(scene, x, y, type = 'BASIC') {
-    const config = ENEMY_TYPES[type];
+    let config = ENEMY_TYPES[type];
 
     if (!config) {
       console.error(`Unknown enemy type: ${type}`);
       type = 'BASIC';
+      config = ENEMY_TYPES[type];
     }
 
     super(scene, x, y, config.texture);

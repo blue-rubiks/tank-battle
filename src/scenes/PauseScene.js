@@ -3,7 +3,7 @@
  */
 
 import Phaser from 'phaser';
-import { SCENES } from '../utils/Constants';
+import { SCENES, GAME_CONFIG } from '../utils/Constants';
 import {
   PALETTE,
   HEX,
@@ -103,17 +103,20 @@ export default class PauseScene extends Phaser.Scene {
 
   drawBreakdown(x, y, w, stats) {
     // 上下虛線（用 graphics 畫）
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     const g = this.add.graphics();
     g.lineStyle(1, PALETTE.GOLD_DEEP, 0.7);
     this.drawDashedLine(g, x, y, x + w, y, 4, 4);
 
+    // Stryker restore all
     const rows = [
-      { k: 'STAGE', v: `${formatStage(stats.level)} / 35` },
+      { k: 'STAGE', v: `${formatStage(stats.level)} / ${formatStage(GAME_CONFIG.TOTAL_LEVELS)}` },
       { k: 'SCORE', v: formatScore(stats.score) },
       { k: 'HOSTILES', v: `${stats.enemiesRemaining} / ${Math.max(stats.enemiesTotal, stats.enemiesRemaining)}` },
       { k: 'TIME ELAPSED', v: formatElapsedTime(stats.elapsed) }
     ];
 
+    // Stryker disable all : 純繪圖（座標 / 尺寸 / 顏色 / 字型 / 動畫參數），無可由單元測試驗證的邏輯
     const rowH = 28;
     rows.forEach((row, i) => {
       const ry = y + 14 + i * rowH;
